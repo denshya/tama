@@ -14,4 +14,9 @@ export class InsertionGroup extends Group {
   }
 
   parent?: ParentNode
+
+  static readonly TAG = "insertion-group"
+  static {
+    window.customElements.define(InsertionGroup.TAG, InsertionGroup as never)
+  }
 }
