@@ -1,3 +1,4 @@
+import { Accessible } from "./Accessor"
 import { onDemandRef, truthyNonNull } from "./Inflator/web/helpers"
 
 /** @internal */
@@ -18,23 +19,23 @@ export class MountGuard {
     source.replaceWith(target)
   }
 
-  for(key: string, property: any) {
+  for(key: string, property: { valid?: Function, subscribe?: Function, get?: Function }) {
     if (property == null) return
     if (typeof property !== "object") return
 
     if (key === "mounted" && property.valid == null) property.valid = truthyNonNull
 
     if (typeof property.valid !== "function") return
-    if (!property.subscribe && !property.get) return
+    if (property.subscribe == null) return
 
     property.subscribe((value: any) => {
-      const valid = property.valid(value)
+      const valid = property.valid?.(value)
       this.guards.current.set(key, valid)
 
       this.toggleMount(this.guards.current.values().every(Boolean))
     })
 
-    if (property.valid(property.valueOf()) === false) {
+    if (property.valid(property.get?.() ?? property.valueOf()) === false) {
       this.immediate = true
     }
   }

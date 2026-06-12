@@ -113,4 +113,5 @@ export default [...compat.extends(
     "@typescript-eslint/ban-types": "off",
     "react/no-children-prop": "off",
   },
-}]
+}];
+

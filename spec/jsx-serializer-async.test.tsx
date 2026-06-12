@@ -1,9 +1,6 @@
-import "./dom"
-
 import { State } from "@denshya/reactive"
 import { beforeAll, describe, expect, it } from "bun:test"
 
-import { injectDOMPolyfill } from "./dom"
 
 import WebJSXSerializerAsync from "../src/jsx/JSXSerializerAsync"
 import WebInflator from "@/Inflator/web/WebInflator"
@@ -14,7 +11,6 @@ describe("WebJSXSerializerAsync", () => {
 
   beforeAll(() => {
     serializer = new WebJSXSerializerAsync
-    injectDOMPolyfill(globalThis)
   })
 
   it("asyncToString null or undefined yields empty string", async () => {

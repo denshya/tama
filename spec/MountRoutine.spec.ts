@@ -1,44 +1,44 @@
-import { MountRoutine } from "@/MountRoutine"
-import { EffectCleanable, EffectSignal, MountFSM } from "@/MountRoutine.types"
+import { Lifecycle } from "@/Lifecycle"
+import { EffectCleanable, EffectSignal, FSM } from "@/Lifecycle.types"
 import { describe, it, expect } from "bun:test"
 
 
-describe("MountRoutine", () => {
+describe("Lifecycle", () => {
   describe("FSM constructor", () => {
     it("initializes with FSM object", () => {
       const calls: string[] = []
-      const fsm: MountFSM = {
-        onMount: () => calls.push("mount"),
-        onUnmount: () => calls.push("unmount"),
+      const fsm: FSM = {
+        onEnter: () => calls.push("mount"),
+        onExit: () => calls.push("unmount"),
       }
 
-      const routine = new MountRoutine(fsm)
+      const routine = new Lifecycle(fsm)
       routine.enter()
       routine.exit()
 
       expect(calls).toEqual(["mount", "unmount"])
     })
 
-    it("handles FSM with only onMount", () => {
+    it("handles FSM with only onEnter", () => {
       const calls: string[] = []
-      const fsm: MountFSM = {
-        onMount: () => calls.push("mount"),
+      const fsm: FSM = {
+        onEnter: () => calls.push("mount"),
       }
 
-      const routine = new MountRoutine(fsm)
+      const routine = new Lifecycle(fsm)
       routine.enter()
       routine.exit()
 
       expect(calls).toEqual(["mount"])
     })
 
-    it("handles FSM with only onUnmount", () => {
+    it("handles FSM with only onExit", () => {
       const calls: string[] = []
-      const fsm: MountFSM = {
-        onUnmount: () => calls.push("unmount"),
+      const fsm: FSM = {
+        onExit: () => calls.push("unmount"),
       }
 
-      const routine = new MountRoutine(fsm)
+      const routine = new Lifecycle(fsm)
       routine.enter()
       routine.exit()
 
@@ -54,7 +54,7 @@ describe("MountRoutine", () => {
         return () => calls.push("cleanup")
       }
 
-      const routine = new MountRoutine(effect)
+      const routine = new Lifecycle(effect)
       routine.enter()
       routine.exit()
 
@@ -68,7 +68,7 @@ describe("MountRoutine", () => {
         return () => calls.push("cleanup")
       }
 
-      const routine = new MountRoutine(effect)
+      const routine = new Lifecycle(effect)
       routine.enter()
       routine.exit()
       routine.exit()
@@ -83,7 +83,7 @@ describe("MountRoutine", () => {
         return () => calls.push("cleanup")
       }
 
-      const routine = new MountRoutine(effect)
+      const routine = new Lifecycle(effect)
 
       routine.enter()
       routine.exit()
@@ -96,12 +96,12 @@ describe("MountRoutine", () => {
 
   describe("EffectSignal constructor", () => {
     it("passes AbortSignal to effect function", () => {
-      let capturedSignal: AbortSignal | null = null
+      let capturedSignal: AbortSignal | null = null as any
       const effect: EffectSignal = (signal) => {
         capturedSignal = signal
       }
 
-      const routine = new MountRoutine(effect)
+      const routine = new Lifecycle(effect)
       routine.enter()
 
       expect(capturedSignal).toBeInstanceOf(AbortSignal)
@@ -109,12 +109,12 @@ describe("MountRoutine", () => {
     })
 
     it("aborts signal on unmount", () => {
-      let capturedSignal: AbortSignal | null = null
+      let capturedSignal: AbortSignal | null = null as any
       const effect: EffectSignal = (signal) => {
         capturedSignal = signal
       }
 
-      const routine = new MountRoutine(effect)
+      const routine = new Lifecycle(effect)
       routine.enter()
       routine.exit()
 
@@ -127,7 +127,7 @@ describe("MountRoutine", () => {
         signals.push(signal)
       }
 
-      const routine = new MountRoutine(effect)
+      const routine = new Lifecycle(effect)
       routine.enter()
       routine.exit()
       routine.enter()
@@ -141,7 +141,7 @@ describe("MountRoutine", () => {
     it("clears AbortController reference on unmount", () => {
       const effect: EffectSignal = (_signal) => { }
 
-      const routine = new MountRoutine(effect)
+      const routine = new Lifecycle(effect)
       routine.enter()
       expect(routine["abortController"]).not.toBeNull()
 
@@ -155,7 +155,7 @@ describe("MountRoutine", () => {
         callCount++
       }
 
-      const routine = new MountRoutine(effect)
+      const routine = new Lifecycle(effect)
       routine.enter()
       routine.exit()
       routine.exit()
@@ -165,25 +165,25 @@ describe("MountRoutine", () => {
   })
 
   describe("enter and exit methods", () => {
-    it("calls onMount when enter is invoked", () => {
+    it("calls onEnter when enter is invoked", () => {
       const calls: string[] = []
-      const fsm: MountFSM = {
-        onMount: () => calls.push("mount"),
+      const fsm: FSM = {
+        onEnter: () => calls.push("mount"),
       }
 
-      const routine = new MountRoutine(fsm)
+      const routine = new Lifecycle(fsm)
       routine.enter()
 
       expect(calls).toContain("mount")
     })
 
-    it("calls onUnmount when exit is invoked", () => {
+    it("calls onExit when exit is invoked", () => {
       const calls: string[] = []
-      const fsm: MountFSM = {
-        onUnmount: () => calls.push("unmount"),
+      const fsm: FSM = {
+        onExit: () => calls.push("unmount"),
       }
 
-      const routine = new MountRoutine(fsm)
+      const routine = new Lifecycle(fsm)
       routine.exit()
 
       expect(calls).toContain("unmount")
@@ -191,12 +191,12 @@ describe("MountRoutine", () => {
 
     it("can call enter and exit multiple times", () => {
       const calls: string[] = []
-      const fsm: MountFSM = {
-        onMount: () => calls.push("mount"),
-        onUnmount: () => calls.push("unmount"),
+      const fsm: FSM = {
+        onEnter: () => calls.push("mount"),
+        onExit: () => calls.push("unmount"),
       }
 
-      const routine = new MountRoutine(fsm)
+      const routine = new Lifecycle(fsm)
       routine.enter()
       routine.exit()
       routine.enter()

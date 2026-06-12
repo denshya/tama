@@ -1,5 +1,3 @@
-import "./dom"
-
 import { beforeEach, describe, expect, it } from "bun:test"
 
 import WebInflator from "../src/Inflator/web/WebInflator"

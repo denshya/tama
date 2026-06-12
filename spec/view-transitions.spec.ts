@@ -1,4 +1,3 @@
-import "./dom"
 import { describe, expect, it } from "bun:test"
 import { Tama, WebInflator } from "../build"
 
@@ -61,7 +60,7 @@ class MockViewAPI {
   transitions = new MockTransitionAPI()
   #subscribers = new Set()
 
-  attach(_) {}
+  attach(_) { }
 
   async set(next) {
     const prev = this.current
@@ -157,12 +156,12 @@ describe("View transitions", () => {
     let invocationContext
     let updateCallbackCalled = false
 
-    ;(document as any).startViewTransition = function startViewTransition(callback) {
-      invocationContext = this
-      callback()
-      updateCallbackCalled = true
-      return { finished: Promise.resolve(), ready: Promise.resolve() }
-    }
+      ; (document as any).startViewTransition = function startViewTransition(callback) {
+        invocationContext = this
+        callback()
+        updateCallbackCalled = true
+        return { finished: Promise.resolve(), ready: Promise.resolve() }
+      }
 
     component.view.transitions.clear()
     component.view.transitions.add(document.startViewTransition)
@@ -175,7 +174,7 @@ describe("View transitions", () => {
     expect(updateCallbackCalled).toBe(true)
     expect(invocationContext).toBe(document)
 
-    ;(document as any).startViewTransition = original
+      ; (document as any).startViewTransition = original
   })
 
   it("runs transition handlers sequentially", async () => {

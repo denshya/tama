@@ -1,14 +1,9 @@
-import "./dom"
-
-import { describe, it, expect, beforeAll, beforeEach } from "bun:test"
+import { beforeEach, describe, expect, it } from "bun:test"
 import { WebInflator } from "../build"
-import { injectDOMPolyfill } from "./dom"
 
 import { State } from "@denshya/reactive"
 
 
-
-beforeAll(() => injectDOMPolyfill(globalThis))
 
 /**
  * JSDoc for `describe` function.
@@ -60,7 +55,7 @@ describe("Conditional Rendering (mounted)", () => {
     const root = document.getElementById("root")!
     root.append(view)
 
-    expect(root.querySelector("span")).toBeNull()
+    expect(root.querySelector("span")?.textContent).toBeUndefined()
   })
 
   it("should append element when mounted becomes true", () => {
@@ -71,6 +66,16 @@ describe("Conditional Rendering (mounted)", () => {
 
     root.append(view)
     mounted.set(true)
+
+    expect(root.querySelector("span")?.textContent).toBe("Visible")
+  })
+
+    it("should ignore properties without `subscribe`", () => {
+    const noSubscribe = { get: () => "asd" }
+
+    const view = inflator.inflate(<span className={noSubscribe} mounted={noSubscribe}>Visible</span>)
+    const root = document.getElementById("root")!
+    root.append(view)
 
     expect(root.querySelector("span")?.textContent).toBe("Visible")
   })

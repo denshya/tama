@@ -3,15 +3,11 @@
   "name": "test",
   "private": true,
   "devDependencies": {
-    "@denshya/reactive": "0.9.0",
-    "@types/bun": "1.3.0",
-    "happy-dom": "20.8.9",
-    "mitata": "1.0.34"
-  },
-  "peerDependencies": {
-    "typescript": "5.9.3"
-  },
-  "dependencies": {
-    "@happy-dom/global-registrator": "^18.0.1"
+    "@denshya/reactive": "../../flow",
+    "@types/bun": "1.3.14",
+    "happy-dom": "20.9.0",
+    "mitata": "1.0.34",
+    "typescript": "6.0.3",
+    "@happy-dom/global-registrator": "^20.9.0"
   }
 }

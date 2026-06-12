@@ -17,6 +17,8 @@ export class InsertionGroup extends Group {
 
   static readonly TAG = "insertion-group"
   static {
-    window.customElements.define(InsertionGroup.TAG, InsertionGroup as never)
+    if (window.customElements.get(InsertionGroup.TAG) == null) {
+      window.customElements.define(InsertionGroup.TAG, InsertionGroup as never)
+    }
   }
 }

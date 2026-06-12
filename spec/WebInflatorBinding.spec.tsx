@@ -1,10 +1,7 @@
-import "./dom"
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { WebInflator } from "../build";
 
-import { describe, it, expect, beforeAll, beforeEach, mock } from "bun:test"
-import { WebInflator } from "../build"
-import { injectDOMPolyfill } from "./dom"
-
-import { State } from "@denshya/reactive"
+import { State } from "@denshya/reactive";
 
 
 describe('WebInflator.subscribe', () => {
@@ -71,10 +68,6 @@ describe('WebInflator.subscribe', () => {
 });
 
 describe("Subscribing Property+Attribute", () => {
-  beforeAll(() => {
-    injectDOMPolyfill(globalThis)
-  })
-
   it("binds textContent to State", () => {
     const state = new State("initial")
     const element = document.createElement("div")

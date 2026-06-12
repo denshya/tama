@@ -1,6 +1,3 @@
-// import { Window } from "happy-dom"
-import "./dom"
-
 import { expect, test } from "bun:test"
 
 test("MyEl fires connectedCallback", async () => {

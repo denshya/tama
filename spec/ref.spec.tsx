@@ -1,5 +1,3 @@
-import "./dom"
-
 import { describe, expect, it, beforeEach } from "bun:test"
 
 import Proton from "../src/Proton/Proton"
