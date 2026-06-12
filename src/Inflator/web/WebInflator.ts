@@ -11,7 +11,8 @@ import { MountGuard } from "@/MountGuard"
 import Observable from "@/Observable"
 import { ProtonComponent } from "@/Proton/ProtonComponent"
 import { ProtonRef } from "@/Proton/ProtonRef"
-import { isIterable, isJSX, isObservableGetter, isPrimitive, isRecord } from "@/utils/testers"
+import { ChildrenType } from "@/jsx/ProtonJSX"
+import { isIterable, isJSX, isRecord } from "@/utils/testers"
 import WebNodeBinding from "@/utils/WebNodeBinding"
 
 import { NAMESPACE_MATH, NAMESPACE_SVG } from "./consts"
@@ -159,18 +160,27 @@ class WebInflator extends Inflator {
   }
 
   private inflateJSXChildren(jsx: JSX.Element, parent: Node): void {
-    if (jsx.props?.children == null) return
-
     // @ts-expect-error 123
     const actualParent = parent.nodeType === Node.COMMENT_NODE ? parent.inflated : parent
 
     try {
-      if (isIterable(jsx.props.children)) {
-        this.inflateIterable(jsx.props.children, actualParent)
-      } else if (isObservableGetter(jsx.props.children) || isPrimitive(jsx.props.children)) {
-        WebInflator.subscribeProperty("textContent", jsx.props.children, actualParent)
-      } else {
-        actualParent.appendChild(this.inflate(jsx.props.children))
+      switch (jsx.childrenType ?? ChildrenType.None) {
+        case ChildrenType.None:
+          return
+        case ChildrenType.Primitive:
+        case ChildrenType.ObservableText:
+          WebInflator.subscribeProperty("textContent", jsx.props?.children, actualParent)
+          return
+        case ChildrenType.ArrayStatic:
+          this.inflateIterable(jsx.props!.children, actualParent)
+          return
+        case ChildrenType.ArrayReactive:
+        case ChildrenType.ObservableIterable:
+          this.inflateIterable(jsx.props!.children, actualParent)
+          return
+        case ChildrenType.VNode:
+          actualParent.appendChild(this.inflate(jsx.props!.children))
+          return
       }
     } catch (error) {
       console.trace(error, "inflateJSXChildren")
@@ -325,7 +335,21 @@ class WebInflator extends Inflator {
 
   protected bindEventListeners(listeners: unknown, element: Element) {
     for (const [event, handler] of WebInflator.iterateEventBindings(listeners)) {
-      element.addEventListener(event, handler)
+      if (DELEGATED_EVENTS.has(event)) {
+        let ev = (element as any).$EV
+        if (ev == null) {
+          ev = {}
+          ;(element as any).$EV = ev
+        }
+        let handlers = ev[event]
+        if (handlers == null) {
+          handlers = []
+          ev[event] = handlers
+        }
+        handlers.push(handler)
+      } else {
+        element.addEventListener(event, handler)
+      }
     }
   }
 
@@ -494,6 +518,36 @@ class WebInflator extends Inflator {
 
     return result
   }
+}
+
+const DELEGATED_EVENTS = new Set([
+  "click", "dblclick", "keydown", "keyup", "keypress",
+  "mousedown", "mousemove", "mouseup",
+  "focusin", "focusout",
+  "touchstart", "touchend", "touchmove",
+])
+
+function handleDelegatedEvent(nativeEvent: Event) {
+  let target = nativeEvent.target as Node | null
+  while (target) {
+    const ev = (target as any).$EV
+    const handlers = ev?.[nativeEvent.type]
+    if (handlers) {
+      for (const handler of handlers) {
+        handler(nativeEvent)
+      }
+    }
+    if (nativeEvent.cancelBubble) break
+    target = target.parentElement
+  }
+}
+
+if (!("$EV" in Node.prototype)) {
+  ;(Node.prototype as any).$EV = undefined
+}
+
+for (const event of DELEGATED_EVENTS) {
+  document.addEventListener(event, handleDelegatedEvent)
 }
 
 export default WebInflator

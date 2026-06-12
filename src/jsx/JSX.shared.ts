@@ -3,6 +3,7 @@ import { IsEqual, LiteralUnion, StringSlice } from "type-fest"
 import { Accessible, AccessorGet } from "../Accessor"
 import Guarded from "../Guarded"
 import Observable from "../Observable"
+import { ChildrenType } from "./ProtonJSX"
 
 
 
@@ -61,6 +62,7 @@ declare global {
       type: any
       props?: any
       children?: any
+      childrenType?: ChildrenType
     }
 
     // eslint-disable-next-line @typescript-eslint/no-empty-object-type
