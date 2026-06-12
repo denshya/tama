@@ -75,7 +75,7 @@ class WebInflator extends Inflator {
   public inflateJSX(jsx: JSX.Element): Node {
     // Alternatives checks.
     switch (typeof jsx.type) {
-      case "string": return this.inflateIntrinsic(jsx.type, jsx.props)
+      case "string": return this.inflateIntrinsic(jsx)
       case "function": return this.inflateComponent(jsx.type, jsx.props)
       case "symbol": return this.inflateFragment()
       default: break
@@ -243,134 +243,123 @@ class WebInflator extends Inflator {
   /**
    * Creates element and binds properties.
    */
-  public inflateIntrinsic(type: string, props?: Record<string, any>): Element | Comment {
-    const isNamespaced = props != null && (props.ns != null || NAMESPACE_SVG.has(type) || NAMESPACE_MATH.has(type))
-    const inflated = isNamespaced ? this.inflateElement(type, props!.ns) : this.inflateElement(type)
+  public inflateIntrinsic(jsx: JSX.Element): Element | Comment {
+    const type = jsx.type as string
+    const ns = jsx.ns as string | undefined
+    const inflated = this.inflateElement(type, { namespace: ns })
 
-    if (props == null) return inflated
+    const isSVG = inflated instanceof SVGElement
+    const props = jsx.props as Record<string, any> | null | undefined
 
+    if (props == null && jsx.ref == null && jsx.className == null && jsx.class == null && jsx.style == null && jsx.on == null && jsx.aria == null && jsx.mounted == null) return inflated
+
+    // ref
+    if (jsx.ref != null) ProtonRef.resolve(jsx.ref, inflated)
+
+    if (jsx.className != null || jsx.class != null) this.bindClassName(jsx.className ?? jsx.class, inflated, isSVG)
+    if (jsx.style != null) this.bindStyle(jsx.style, inflated.style)
+    if (jsx.on != null) this.bindEventListeners(jsx.on, inflated)
+    if (jsx.aria != null) this.bindNodeAria(jsx.aria, inflated)
+
+    // Unknown props + MountGuard
     let mountGuard: MountGuard | undefined
     let immediate = false
 
-    for (const key in props) {
-      const value = props[key]
-
-      if (key === "children" || key === "ns") continue
-
-      if (MountGuard.is(value)) {
-        mountGuard ??= new MountGuard(inflated)
-        if (MountGuard.truthy(value)) immediate = true
-        mountGuard.for(value)
-        continue
-      }
-
-      if (key === "ref") {
-        if (value != null) ProtonRef.resolve(value, inflated)
-        continue
-      }
-
-      if (key === "className" || key === "class") {
-        if (value != null && typeof value !== "object") {
-          const str = String(value)
-          if (inflated instanceof SVGElement) {
-            inflated.setAttribute("class", str)
-          } else {
-            inflated.className = str
-          }
-        } else if (inflated instanceof SVGElement) {
-          WebInflator.subscribeAttribute(inflated, "class", value)
+    if (props != null) {
+      for (const key in props) {
+        if (key === "children" || key === "ns") continue
+        const value = props[key]
+        if (MountGuard.is(value)) {
+          mountGuard ??= new MountGuard(inflated)
+          if (MountGuard.truthy(value)) immediate = true
+          mountGuard.for(value)
+          continue
+        }
+        if (typeof value !== "object" && typeof value !== "function" && value != null) {
+          if (isSVG || key.includes("-")) inflated.setAttribute(key, value as string)
+          else (inflated as any)[key] = value
         } else if (value != null) {
-          WebInflator.subscribeProperty("className", value, inflated)
-        }
-        continue
-      }
-
-      if (key === "style") {
-        if (typeof value === "string") {
-          inflated.style.cssText = value
-        } else if (isRecord(value)) {
-          for (const prop in value) {
-            if (prop.startsWith("--")) {
-              WebInflator.subscribe(value[prop], v => (inflated as HTMLElement).style.setProperty(prop, v as string))
-              continue
-            }
-            WebInflator.subscribeProperty(prop, value[prop], (inflated as HTMLElement).style)
-          }
-        } else if (value != null) {
-          WebInflator.subscribe(value, v => inflated.style.cssText = v as string)
-        }
-        continue
-      }
-
-      if (key === "on") {
-        if (isRecord(value) || Array.isArray(value)) {
-          this.bindEventListeners(value, inflated)
-        }
-        continue
-      }
-
-      if (key === "aria") {
-        if (isRecord(value)) {
-          for (const akey in value) {
-            WebInflator.subscribeProperty(akey, value[akey], inflated)
-          }
-        }
-        continue
-      }
-
-      if (typeof value !== "object" && typeof value !== "function" && value != null) {
-        if (inflated instanceof SVGElement || key.includes("-")) {
-          inflated.setAttribute(key, value as string)
-        } else {
-          (inflated as any)[key] = value
-        }
-      } else if (value != null) {
-        if (inflated instanceof SVGElement || key.includes("-")) {
-          WebInflator.subscribeAttribute(inflated, key, value)
-        } else {
-          WebInflator.subscribeProperty(key, value, inflated)
+          if (isSVG || key.includes("-")) WebInflator.subscribeAttribute(inflated, key, value)
+          else WebInflator.subscribeProperty(key, value, inflated)
         }
       }
     }
 
-    if (inflated instanceof HTMLInputElement) {
-      WebInflator.subscribeProperty("type", props.type, inflated)
-      WebNodeBinding.dualSignalBind(inflated, "valueAsDate", props.valueAsDate, "input")
-      WebNodeBinding.dualSignalBind(inflated, "valueAsNumber", props.valueAsNumber, "input")
-    }
-    if (inflated instanceof HTMLInputElement || inflated instanceof HTMLTextAreaElement) {
-      WebNodeBinding.dualSignalBind(inflated, "value", props.value, "input")
-    }
-    if (inflated instanceof HTMLSelectElement) {
-      WebNodeBinding.dualSignalBind(inflated, "value", props.value, "change")
-    }
+    this.bindFormControls(type, props, inflated)
+    if (props != null) this.bindCustomAttributes(props, inflated)
 
-    if (this.jsxAttributes.size > 0) {
-      const bind = (key: string, value: unknown) => {
-        WebInflator.subscribeProperty(key, value, inflated)
-      }
-      for (const [key, attributeSetup] of this.jsxAttributes) {
-        if (key in props === false) continue
-        attributeSetup({ props, key, value: props[key], bind })
-      }
-    }
-
-    if (props.mounted != null) {
-      props.mounted.valid ??= truthyNonNull
-      if (MountGuard.is(props.mounted)) {
-        if (MountGuard.truthy(props.mounted)) immediate = true
+    // mounted
+    const mounted = jsx.mounted
+    if (mounted != null) {
+      (mounted as any).valid ??= truthyNonNull
+      if (MountGuard.is(mounted)) {
+        if (MountGuard.truthy(mounted)) immediate = true
         mountGuard ??= new MountGuard(inflated)
-        mountGuard.for(props.mounted)
+        mountGuard.for(mounted)
       }
     }
 
     if (immediate) {
-      // @ts-expect-error 123
-      mountGuard!.placeholder.current.inflated = inflated
+      (mountGuard!).placeholder.current.inflated = inflated
       return mountGuard!.placeholder.current
     }
 
     return inflated
+  }
+
+  protected bindClassName(cls: unknown, node: Element, isSVG: boolean) {
+    if (typeof cls !== "object") {
+      if (isSVG) node.setAttribute("class", String(cls))
+      else node.className = String(cls)
+    } else if (isSVG) {
+      WebInflator.subscribeAttribute(node, "class", cls)
+    } else {
+      WebInflator.subscribeProperty("className", cls, node)
+    }
+  }
+
+  protected bindStyle(style: unknown, element: CSSStyleDeclaration) {
+    if (isRecord(style)) {
+      for (const property in style) {
+        if (property.startsWith("--")) {
+          WebInflator.subscribe(style[property], value => element.setProperty(property, value as string))
+          continue
+        }
+        WebInflator.subscribeProperty(property, style[property], element)
+      }
+      return
+    }
+    WebInflator.subscribe(style, value => element.cssText = value as string)
+  }
+
+  protected bindNodeAria(aria: Record<string, unknown>, node: Element) {
+    for (const key in aria) {
+      WebInflator.subscribeProperty(key, aria[key], node)
+    }
+  }
+
+  protected bindFormControls(type: string, props: Record<string, any> | null | undefined, node: Element) {
+    if (type === "input") {
+      if (props?.type != null) WebInflator.subscribeProperty("type", props.type, node)
+      if (props?.valueAsDate != null) WebNodeBinding.dualSignalBind(node, "valueAsDate", props.valueAsDate, "input")
+      if (props?.valueAsNumber != null) WebNodeBinding.dualSignalBind(node, "valueAsNumber", props.valueAsNumber, "input")
+      if (props?.value != null) WebNodeBinding.dualSignalBind(node, "value", props.value, "input")
+    } else if (type === "textarea") {
+      if (props?.value != null) WebNodeBinding.dualSignalBind(node, "value", props.value, "input")
+    } else if (type === "select") {
+      if (props?.value != null) WebNodeBinding.dualSignalBind(node, "value", props.value, "change")
+    }
+  }
+
+  protected bindCustomAttributes(props: Record<string, any>, node: Element) {
+    if (this.jsxAttributes.size === 0) return
+    const bind = (key: string, value: unknown) => {
+      WebInflator.subscribeProperty(key, value, node)
+    }
+    for (const [key, attributeSetup] of this.jsxAttributes) {
+      if (key in props === false) continue
+      attributeSetup({ props, key, value: props[key], bind })
+    }
   }
 
   static final = new FinalizationRegistry<Disposal>(disposal => {
@@ -396,7 +385,6 @@ class WebInflator extends Inflator {
 
     WebInflator.final.register(componentGroup, component.disposal)
 
-
     try {
       component.view.initWith(factory.call(component, props))
     } catch (thrown) {
@@ -404,7 +392,6 @@ class WebInflator extends Inflator {
       console.error(thrown)
       return componentGroup
     }
-
 
     const currentView = component.inflator.inflate(component.view.current) as ChildNode | null
     replace(currentView)
@@ -430,23 +417,6 @@ class WebInflator extends Inflator {
     })
 
     return componentGroup
-  }
-
-  protected bindStyle(style: unknown, element: ElementCSSInlineStyle) {
-    if (isRecord(style)) {
-      for (const property in style) {
-        if (property.startsWith("--")) {
-          WebInflator.subscribe(style[property], value => element.style.setProperty(property, value as string))
-          continue
-        }
-
-        WebInflator.subscribeProperty(property, style[property], element.style)
-      }
-
-      return
-    }
-
-    WebInflator.subscribe(style, value => element.style.cssText = value as string)
   }
 
   protected bindEventListeners(listeners: unknown, element: Element) {
@@ -509,85 +479,6 @@ class WebInflator extends Inflator {
     }
 
     return false
-  }
-
-  protected bindProperties(props: object, inflated: Element, overridden: Set<string>) {
-    try {
-      let value
-
-      for (const key in props) {
-        value = props[key as never]
-
-        if (key === "children") continue
-        if (overridden.has(key)) continue
-
-        if (inflated instanceof SVGElement || key.includes("-")) {
-          WebInflator.subscribeAttribute(inflated, key, value)
-        } else {
-          WebInflator.subscribeProperty(key, value, inflated)
-        }
-      }
-
-    } catch (error) {
-      console.error("Element props binding failed -> ", error)
-    }
-  }
-
-  /** @returns property names that were overridden. */
-  protected bindCustomProperties(props: any, element: Element): Set<string> {
-    const overrides = new Set<string>()
-
-    if (isRecord(props.on) || Array.isArray(props.on)) {
-      this.bindEventListeners(props.on, element)
-      overrides.add("on")
-    }
-
-    if (element instanceof HTMLElement && "style" in props) {
-      this.bindStyle(props.style, element)
-      overrides.add("style")
-    }
-
-    if ("aria" in props) {
-      for (const key in props.aria) {
-        WebInflator.subscribeProperty(key, props.aria[key], element)
-      }
-      overrides.add("aria")
-    }
-
-    if (element instanceof HTMLInputElement) {
-      // Ensures correct type beforehand.
-      WebInflator.subscribeProperty("type", props.type, element)
-
-      WebNodeBinding.dualSignalBind(element, "valueAsDate", props.valueAsDate, "input")
-      WebNodeBinding.dualSignalBind(element, "valueAsNumber", props.valueAsNumber, "input")
-
-      overrides.add("type").add("valueAsDate").add("valueAsNumber")
-    }
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-      WebNodeBinding.dualSignalBind(element, "value", props.value, "input")
-      overrides.add("value")
-    }
-    if (element instanceof HTMLSelectElement) {
-      WebNodeBinding.dualSignalBind(element, "value", props.value, "change")
-      overrides.add("value")
-    }
-
-
-    if (this.jsxAttributes.size > 0) {
-      function bind(key: string, value: unknown) {
-        WebInflator.subscribeProperty(key, value, element)
-        overrides.add(key)
-      }
-
-      for (const [key, attributeSetup] of this.jsxAttributes) {
-        if (key in props === false) continue
-
-        attributeSetup({ props, key, value: props[key], bind })
-        overrides.add(key)
-      }
-    }
-
-    return overrides
   }
 
   /**
