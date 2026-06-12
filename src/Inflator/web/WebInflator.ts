@@ -32,7 +32,6 @@ type WebInflateResult<T> =
 
 
 interface WebInflatorFlags {
-  debug: boolean
   skipAsync: boolean
   disableJSXCache: boolean
 }
@@ -41,7 +40,6 @@ class WebInflator extends Inflator {
   private static jsxCache = new WeakMap<object, Node>
 
   flags: WebInflatorFlags = {
-    debug: false,
     skipAsync: false,
     disableJSXCache: false,
   }
@@ -197,7 +195,19 @@ class WebInflator extends Inflator {
     if (props == null) return inflated
 
     const overridden = this.bindCustomProperties(props, inflated)
-    const properties = this.bindProperties(props, inflated, overridden)
+
+    const cls = props.className ?? props.class
+    if (cls != null && typeof cls !== "object") {
+      const str = String(cls)
+      if (inflated instanceof SVGElement) {
+        inflated.setAttribute("class", str)
+      } else {
+        inflated.className = str
+      }
+      overridden.add("className").add("class")
+    }
+
+    this.bindProperties(props, inflated, overridden)
 
     if (props.ref != null) ProtonRef.resolve(props.ref, inflated)
 
@@ -205,6 +215,8 @@ class WebInflator extends Inflator {
     let immediate = false
 
     for (const key in props) {
+      if (key === "class" || key === "className") continue
+
       const value = props[key]
 
       if (MountGuard.is(value) === false) continue
