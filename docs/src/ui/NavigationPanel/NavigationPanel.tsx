@@ -1,6 +1,6 @@
 import "./NavigationPanel.scss"
 
-import { State } from "@denshya/reactive"
+import { State, StateBoolean } from "@denshya/reactive"
 import Link from "@/app/navigation/Link"
 import Icon from "../static/Icon/Icon"
 import { startCase } from "lodash-es"
@@ -27,11 +27,11 @@ function NavigationTreeLink(props: { item: FolderTree, active: State<string>, le
   const level = props.level ?? 0
   const folder = props.item
   const active = props.active.is(folder.path)
-  const expanded = new State(props.active.current.startsWith(props.item.path))
-
-  const linkEvents = { click: () => expanded.set(x => !x) }
 
   if (folder.children.length > 0) {
+    const expanded = new StateBoolean(props.active.current.startsWith(props.item.path))
+    const linkEvents = { click: () => expanded.toggle() }
+
     return (
       <div className="navigation-panel__folder">
         <div className="navigation-panel__link" classMods={{ active, expanded }} style={{ "--level": level }} on={linkEvents}>
@@ -47,7 +47,7 @@ function NavigationTreeLink(props: { item: FolderTree, active: State<string>, le
     )
   }
   return (
-    <div className="navigation-panel__link" classMods={{ active }} style={{ "--level": level }} on={linkEvents}>
+    <div className="navigation-panel__link" classMods={{ active }} style={{ "--level": level }}>
       <Link to={"/" + folder.path}>{startCase(folder.name)}</Link>
     </div>
   )

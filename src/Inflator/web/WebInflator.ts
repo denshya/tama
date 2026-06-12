@@ -249,7 +249,7 @@ class WebInflator extends Inflator {
 
     if (props == null) return this.inflateElement(type)
 
-    const isSVG = type === "svg" || NAMESPACE_SVG.has(type)
+    const isSVG = NAMESPACE_SVG.has(type)
     const inflated = this.inflateElement(type, props.ns != null ? { namespace: props.ns as string } : undefined)
 
     let mountGuard: MountGuard | undefined
