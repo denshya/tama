@@ -127,13 +127,47 @@ class WebInflator extends Inflator {
 
   protected inflateIterable<T, P extends ParentNode = InsertionGroup>(iterable: (IteratorObject<T> & Partial<Observable<IteratorObject<T>>>), parent: P = new InsertionGroup as never): P {
     const replace = (otherIterable: IteratorObject<T> & Partial<Observable<IteratorObject<T>>>) => {
-      parent.replaceChildren(...this.__inflateIterable__(otherIterable)) // Previous nodes will be lost at this point.
+      parent.replaceChildren(...this.__inflateIterable__(otherIterable))
     }
 
     replace(iterableOf(iterable))
     iterable.subscribe?.(replace)
 
     return parent
+  }
+
+  private inflatePositionedIterable<T>(
+    iterable: IteratorObject<T> & Partial<Observable<IteratorObject<T>>>,
+    parent: ParentNode,
+  ): void {
+    let anchor = parent.lastChild
+    let currentNodes: Node[] = []
+
+    const replace = (otherIterable: IteratorObject<T>) => {
+      for (const node of currentNodes) (node as ChildNode).remove()
+      currentNodes.length = 0
+
+      const nodes = this.__inflateIterable__(otherIterable)
+      if (nodes.length === 0 && !anchor) {
+        anchor = document.createComment("reactive-iterable")
+        parent.appendChild(anchor)
+        return
+      }
+      if (nodes.length === 0) return
+
+      currentNodes.push(...nodes)
+
+      if (anchor && anchor.isConnected) {
+        anchor.after(...nodes)
+      } else {
+        parent.prepend(...nodes)
+      }
+
+      anchor = nodes[nodes.length - 1]
+    }
+
+    replace(iterableOf(iterable))
+    iterable.subscribe?.(replace)
   }
   protected inflateAsyncIterable<T>(asyncIterable: AsyncIteratorObject<T>): unknown {
     throw new TypeError("Async Iterator is not supported", { cause: { asyncIterable } })
@@ -168,6 +202,15 @@ class WebInflator extends Inflator {
         case ChildrenType.None:
           return
         case ChildrenType.Primitive:
+          {
+            const text = jsx.props!.children
+            if (typeof text !== "object" && typeof text !== "function") {
+              actualParent.textContent = text as string
+            } else {
+              WebInflator.subscribeProperty("textContent", text, actualParent)
+            }
+          }
+          return
         case ChildrenType.ObservableText:
           WebInflator.subscribeProperty("textContent", jsx.props?.children, actualParent)
           return
@@ -176,7 +219,7 @@ class WebInflator extends Inflator {
           return
         case ChildrenType.ArrayReactive:
         case ChildrenType.ObservableIterable:
-          this.inflateIterable(jsx.props!.children, actualParent)
+          this.inflatePositionedIterable(jsx.props!.children, actualParent)
           return
         case ChildrenType.VNode:
           actualParent.appendChild(this.inflate(jsx.props!.children))
@@ -201,52 +244,125 @@ class WebInflator extends Inflator {
    * Creates element and binds properties.
    */
   public inflateIntrinsic(type: string, props?: Record<string, any>): Element | Comment {
-    const inflated = this.inflateElement(type, props?.ns)
+    const isNamespaced = props != null && (props.ns != null || NAMESPACE_SVG.has(type) || NAMESPACE_MATH.has(type))
+    const inflated = isNamespaced ? this.inflateElement(type, props!.ns) : this.inflateElement(type)
+
     if (props == null) return inflated
 
-    const overridden = this.bindCustomProperties(props, inflated)
-
-    const cls = props.className ?? props.class
-    if (cls != null && typeof cls !== "object") {
-      const str = String(cls)
-      if (inflated instanceof SVGElement) {
-        inflated.setAttribute("class", str)
-      } else {
-        inflated.className = str
-      }
-      overridden.add("className").add("class")
-    }
-
-    this.bindProperties(props, inflated, overridden)
-
-    if (props.ref != null) ProtonRef.resolve(props.ref, inflated)
-
-    let mountGuard: MountGuard
+    let mountGuard: MountGuard | undefined
     let immediate = false
 
     for (const key in props) {
-      if (key === "class" || key === "className") continue
-
       const value = props[key]
 
-      if (MountGuard.is(value) === false) continue
-      if (MountGuard.truthy(value)) immediate = true
+      if (key === "children" || key === "ns") continue
 
-      mountGuard ??= new MountGuard(inflated)
-      mountGuard.for(value)
+      if (MountGuard.is(value)) {
+        mountGuard ??= new MountGuard(inflated)
+        if (MountGuard.truthy(value)) immediate = true
+        mountGuard.for(value)
+        continue
+      }
+
+      if (key === "ref") {
+        if (value != null) ProtonRef.resolve(value, inflated)
+        continue
+      }
+
+      if (key === "className" || key === "class") {
+        if (value != null && typeof value !== "object") {
+          const str = String(value)
+          if (inflated instanceof SVGElement) {
+            inflated.setAttribute("class", str)
+          } else {
+            inflated.className = str
+          }
+        } else if (inflated instanceof SVGElement) {
+          WebInflator.subscribeAttribute(inflated, "class", value)
+        } else if (value != null) {
+          WebInflator.subscribeProperty("className", value, inflated)
+        }
+        continue
+      }
+
+      if (key === "style") {
+        if (typeof value === "string") {
+          inflated.style.cssText = value
+        } else if (isRecord(value)) {
+          for (const prop in value) {
+            if (prop.startsWith("--")) {
+              WebInflator.subscribe(value[prop], v => (inflated as HTMLElement).style.setProperty(prop, v as string))
+              continue
+            }
+            WebInflator.subscribeProperty(prop, value[prop], (inflated as HTMLElement).style)
+          }
+        } else if (value != null) {
+          WebInflator.subscribe(value, v => inflated.style.cssText = v as string)
+        }
+        continue
+      }
+
+      if (key === "on") {
+        if (isRecord(value) || Array.isArray(value)) {
+          this.bindEventListeners(value, inflated)
+        }
+        continue
+      }
+
+      if (key === "aria") {
+        if (isRecord(value)) {
+          for (const akey in value) {
+            WebInflator.subscribeProperty(akey, value[akey], inflated)
+          }
+        }
+        continue
+      }
+
+      if (typeof value !== "object" && typeof value !== "function" && value != null) {
+        if (inflated instanceof SVGElement || key.includes("-")) {
+          inflated.setAttribute(key, value as string)
+        } else {
+          (inflated as any)[key] = value
+        }
+      } else if (value != null) {
+        if (inflated instanceof SVGElement || key.includes("-")) {
+          WebInflator.subscribeAttribute(inflated, key, value)
+        } else {
+          WebInflator.subscribeProperty(key, value, inflated)
+        }
+      }
+    }
+
+    if (inflated instanceof HTMLInputElement) {
+      WebInflator.subscribeProperty("type", props.type, inflated)
+      WebNodeBinding.dualSignalBind(inflated, "valueAsDate", props.valueAsDate, "input")
+      WebNodeBinding.dualSignalBind(inflated, "valueAsNumber", props.valueAsNumber, "input")
+    }
+    if (inflated instanceof HTMLInputElement || inflated instanceof HTMLTextAreaElement) {
+      WebNodeBinding.dualSignalBind(inflated, "value", props.value, "input")
+    }
+    if (inflated instanceof HTMLSelectElement) {
+      WebNodeBinding.dualSignalBind(inflated, "value", props.value, "change")
+    }
+
+    if (this.jsxAttributes.size > 0) {
+      const bind = (key: string, value: unknown) => {
+        WebInflator.subscribeProperty(key, value, inflated)
+      }
+      for (const [key, attributeSetup] of this.jsxAttributes) {
+        if (key in props === false) continue
+        attributeSetup({ props, key, value: props[key], bind })
+      }
     }
 
     if (props.mounted != null) {
       props.mounted.valid ??= truthyNonNull
-
       if (MountGuard.is(props.mounted)) {
         if (MountGuard.truthy(props.mounted)) immediate = true
-
         mountGuard ??= new MountGuard(inflated)
         mountGuard.for(props.mounted)
       }
     }
-
 
     if (immediate) {
       // @ts-expect-error 123
@@ -497,6 +613,10 @@ class WebInflator extends Inflator {
   /** @internal */
   protected static subscribe(source: unknown, targetBindCallback: (value: unknown) => void): void {
     if (source == null) return
+    if (typeof source !== "object" && typeof source !== "function") {
+      targetBindCallback(source)
+      return
+    }
     return void State.subscribeImmediate(source, targetBindCallback)
   }
 
@@ -546,8 +666,11 @@ if (!("$EV" in Node.prototype)) {
   ;(Node.prototype as any).$EV = undefined
 }
 
-for (const event of DELEGATED_EVENTS) {
-  document.addEventListener(event, handleDelegatedEvent)
+if (!("__tama_delegation" in document)) {
+  ;(document as any).__tama_delegation = true
+  for (const event of DELEGATED_EVENTS) {
+    document.addEventListener(event, handleDelegatedEvent)
+  }
 }
 
 export default WebInflator

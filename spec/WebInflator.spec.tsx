@@ -189,6 +189,33 @@ describe("WebInflator", () => {
     expect(svg.getAttribute("href")).toBe("123")
   })
 
+  it("sets static className on SVG elements via setAttribute", () => {
+    const circle = inflator.inflate(<circle className="my-cls" />) as SVGCircleElement
+    expect(circle.getAttribute("class")).toBe("my-cls")
+  })
+
+  it("sets reactive className on SVG elements via setAttribute", () => {
+    const cls = new State("foo")
+    const circle = inflator.inflate(<circle className={cls} />) as SVGCircleElement
+    expect(circle.getAttribute("class")).toBe("foo")
+    cls.set("bar")
+    expect(circle.getAttribute("class")).toBe("bar")
+  })
+
+  it("sets static className on HTML elements via .className", () => {
+    const div = inflator.inflate(<div className="my-cls" />) as HTMLDivElement
+    expect(div.className).toBe("my-cls")
+    expect(div.getAttribute("class")).toBe("my-cls")
+  })
+
+  it("sets reactive className on HTML elements via .className", () => {
+    const cls = new State("foo")
+    const div = inflator.inflate(<div className={cls} />) as HTMLDivElement
+    expect(div.className).toBe("foo")
+    cls.set("bar")
+    expect(div.className).toBe("bar")
+  })
+
   it("binds multiple event listener sources from arrays", () => {
     const events: string[] = []
 
@@ -205,7 +232,7 @@ describe("WebInflator", () => {
 
     document.body.append(element)
 
-    element.dispatchEvent(new Event("click"))
+    element.dispatchEvent(new Event("click", { bubbles: true }))
     element.dispatchEvent(new Event("hover"))
 
     expect(events).toEqual(["feature:click", "feature:hover", "extra:hover"])
@@ -268,8 +295,10 @@ describe("WebInflator", () => {
       <button on={{ click: () => clicked = true, mouseover: () => hovered = true }} />
     ) as HTMLButtonElement
 
+    document.body.append(button)
     button.click()
     button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
+    button.remove()
 
     expect(clicked).toBe(true)
     expect(hovered).toBe(true)
@@ -323,11 +352,51 @@ describe("WebInflator", () => {
     expect(inflator.inflate(1)).not.toBe(inflator.inflate(1))
   })
 
-  // it("inflates custom element (`is` option)", () => {
-  //   class CustomDiv extends HTMLDivElement { }
-  //   window.customElements.define("custom-div", CustomDiv)
+  it("creates element with multiple static attributes via HTML string", () => {
+    const el = inflator.inflate(<div id="test" data-index="42" hidden />) as HTMLElement
+    expect(el.id).toBe("test")
+    expect(el.getAttribute("data-index")).toBe("42")
+    expect(el.hidden).toBe(true)
+  })
 
-  //   const inflatedCustomDiv = inflator.inflate(<div is="custom-div" />)
-  //   expect(inflatedCustomDiv).toBeInstanceOf(CustomDiv)
-  // })
+  it("merges static HTML attrs with reactive attrs", () => {
+    const title = new State("hello")
+    const el = inflator.inflate(<div id="static" title={title} />) as HTMLElement
+    expect(el.id).toBe("static")
+    expect(el.title).toBe("hello")
+    title.set("world")
+    expect(el.title).toBe("world")
+  })
+
+  it("inflates reactive iterable that starts empty then receives items", () => {
+    const items = new StateArray<string | JSX.Element>([])
+    const div = inflator.inflate(<div>{items}</div>) as HTMLElement
+    document.body.append(div)
+
+    expect(div.childNodes.length).toBe(0)
+
+    items.set(["a", "b", "c"])
+    expect(div.childNodes.length).toBe(3)
+    expect([...div.childNodes].map(n => n.textContent)).toEqual(["a", "b", "c"])
+  })
+
+  it("stops delegated event propagation when cancelBubble is set", () => {
+    const outerEvents: string[] = []
+    const innerEvents: string[] = []
+
+    const outer = inflator.inflate(
+      <div on={{ click: () => outerEvents.push("outer") }} />
+    ) as HTMLElement
+    const inner = inflator.inflate(
+      <div on={{ click: (e: Event) => { innerEvents.push("inner"); e.stopPropagation() } }} />
+    ) as HTMLElement
+
+    outer.append(inner)
+    document.body.append(outer)
+
+    inner.dispatchEvent(new Event("click", { bubbles: true }))
+
+    expect(innerEvents).toEqual(["inner"])
+    expect(outerEvents).toEqual([])
+  })
 })

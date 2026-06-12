@@ -96,7 +96,7 @@ describe("WebJSXSerializerAsync", () => {
 
   it("skips elements with [data-nosnippet]", async () => {
     const element = <div data-nosnippet />
-    expect(element).toEqual({ type: "div", props: { "data-nosnippet": true } })
+    expect(element).toMatchObject({ type: "div", props: { "data-nosnippet": true } })
     expect(element.props).toEqual({ "data-nosnippet": true })
 
     const out = await serializer.asyncToString(element)

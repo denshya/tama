@@ -1,0 +1,11 @@
+{
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@happy-dom/global-registrator": "^20.9.0",
+    "benchik": "../../../../mylibraries/bench-suite",
+    "inferno": "^9.1.0",
+    "inferno-create-element": "^9.1.0",
+    "inferno-hyperscript": "^9.1.0"
+  }
+}

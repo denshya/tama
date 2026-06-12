@@ -35,7 +35,9 @@ describe("WebInflator", () => {
     let clicked = false
 
     const button = inflator.inflate(<button on={{ click: () => { clicked = true } }}>Click</button>) as HTMLButtonElement
+    document.body.append(button)
     button.click()
+    button.remove()
 
     expect(clicked).toBe(true)
   })

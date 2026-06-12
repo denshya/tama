@@ -34,12 +34,12 @@ function classifyChildren(children: unknown): ChildrenType {
     return ChildrenType.ArrayStatic
   }
 
-  if ((children as any).subscribe instanceof Function) {
-    return ChildrenType.ObservableText
-  }
-
   if (children instanceof Object && Symbol.iterator in children) {
     return ChildrenType.ArrayStatic
+  }
+
+  if ((children as any).subscribe instanceof Function) {
+    return ChildrenType.ObservableText
   }
 
   return ChildrenType.VNode
