@@ -304,6 +304,120 @@ describe("WebInflator", () => {
     expect(hovered).toBe(true)
   })
 
+  it("binds event listener via handleEvent object", () => {
+    const events: string[] = []
+    const listener: EventListenerObject = {
+      handleEvent: () => events.push("handled"),
+    }
+
+    const button = inflator.inflate(
+      <button on={{ mouseenter: listener }} />
+    ) as HTMLButtonElement
+
+    document.body.append(button)
+    button.dispatchEvent(new Event("mouseenter", { bubbles: true }))
+
+    expect(events).toEqual(["handled"])
+  })
+
+  it("binds array of handlers for a single event name", () => {
+    const events: string[] = []
+
+    const element = inflator.inflate(
+      <div on={{ click: [() => events.push("a"), () => events.push("b")] }} />
+    ) as HTMLElement
+
+    document.body.append(element)
+    element.dispatchEvent(new Event("click", { bubbles: true }))
+
+    expect(events).toEqual(["a", "b"])
+  })
+
+  it("binds non-delegated event via addEventListener", () => {
+    let focused = false
+
+    const input = inflator.inflate(
+      <input on={{ focus: () => focused = true }} />
+    ) as HTMLInputElement
+
+    document.body.append(input)
+    input.dispatchEvent(new Event("focus", { bubbles: false }))
+
+    expect(focused).toBe(true)
+  })
+
+  it("fires multiple delegated handlers on the same element", () => {
+    const events: string[] = []
+
+    const element = inflator.inflate(
+      <div on={{ click: [() => events.push("first"), () => events.push("second")] }} />
+    ) as HTMLElement
+
+    document.body.append(element)
+    element.dispatchEvent(new Event("click", { bubbles: true }))
+
+    expect(events).toEqual(["first", "second"])
+  })
+
+  it("skips null and undefined on values without error", () => {
+    expect(() => inflator.inflate(<div on={null} />)).not.toThrow()
+    expect(() => inflator.inflate(<div on={undefined} />)).not.toThrow()
+  })
+
+  it("skips empty on object without error", () => {
+    expect(() => inflator.inflate(<div on={{}} />)).not.toThrow()
+  })
+
+  it("propagates click from child button to parent div (delegated)", () => {
+    const events: string[] = []
+
+    const div = inflator.inflate(
+      <div on={{ click: () => events.push("div") }}>
+        <button on={{ click: () => events.push("button") }} />
+      </div>
+    ) as HTMLElement
+
+    document.body.append(div)
+    const button = div.querySelector("button")!
+    button.dispatchEvent(new Event("click", { bubbles: true }))
+
+    expect(events).toEqual(["button", "div"])
+  })
+
+  it("stops propagation of click from child button to parent div", () => {
+    const events: string[] = []
+
+    const div = inflator.inflate(
+      <div on={{ click: () => events.push("div") }}>
+        <button on={{ click: (e: Event) => { events.push("button"); e.stopPropagation() } }} />
+      </div>
+    ) as HTMLElement
+
+    document.body.append(div)
+    const button = div.querySelector("button")!
+    button.dispatchEvent(new Event("click", { bubbles: true }))
+
+    expect(events).toEqual(["button"])
+  })
+
+  it("propagates through three levels of nested delegated clicks", () => {
+    const events: string[] = []
+
+    const root = inflator.inflate(
+      <div on={{ click: () => events.push("root") }}>
+        <div on={{ click: () => events.push("parent") }}>
+          <button on={{ click: () => events.push("child") }} />
+        </div>
+      </div>
+    ) as HTMLElement
+
+    document.body.append(root)
+    const button = root.querySelector("button")!
+    button.dispatchEvent(new Event("click", { bubbles: true }))
+
+    expect(events).toEqual(["child", "parent", "root"])
+  })
+
   it("guarded mount/unmount toggles DOM presence and handles rapid toggles", () => {
     document.body.innerHTML = "<div id='root' />"
 
@@ -330,6 +444,75 @@ describe("WebInflator", () => {
     // @ts-expect-error
     const element = inflator.inflate(<div foo="bar" />)
     expect(element["foo" as never]).toBe("bar-ok" as never)
+  })
+
+  it("applies multiple custom jsxAttributes", () => {
+    inflator.jsxAttributes.set("a" as never, context => context.bind("data-a", `${context.value}-a`))
+    inflator.jsxAttributes.set("b" as never, context => context.bind("data-b", `${context.value}-b`))
+    // @ts-expect-error
+    const element = inflator.inflate(<div a="1" b="2" />)
+    expect(element["data-a" as never]).toBe("1-a")
+    expect(element["data-b" as never]).toBe("2-b")
+  })
+
+  it("skips custom attribute when prop is not present", () => {
+    let called = false
+    inflator.jsxAttributes.set("customProp" as never, () => { called = true })
+    inflator.inflate(<div id="only" />)
+    expect(called).toBeFalse()
+  })
+
+  it("passes correct context to custom attribute handler", () => {
+    let captured: any = null
+    inflator.jsxAttributes.set("customProp" as never, context => { captured = context })
+    const style = { color: "red" }
+    // @ts-expect-error
+    inflator.inflate(<div customProp="val" className="cls" style={style} />)
+    expect(captured.key).toBe("customProp")
+    expect(captured.value).toBe("val")
+    expect(captured.props.customProp).toBe("val")
+    expect(captured.props.className).toBe("cls")
+    expect(captured.props.style).toBe(style)
+    expect(typeof captured.bind).toBe("function")
+  })
+
+  it("binds custom attribute with plain value", () => {
+    inflator.jsxAttributes.set("customProp" as never, context => {
+      context.bind("data-custom", `prefix-${context.value}`)
+    })
+    // @ts-expect-error
+    const element = inflator.inflate(<div customProp="hello" />)
+    expect(element["data-custom" as never]).toBe("prefix-hello")
+  })
+
+  it("custom attribute reads other props from context", () => {
+    inflator.jsxAttributes.set("combine" as never, context => {
+      context.bind("data-combined", `${context.props.className}-${context.value}`)
+    })
+    // @ts-expect-error
+    const element = inflator.inflate(<div className="base" combine="val" />)
+    expect(element["data-combined" as never]).toBe("base-val")
+  })
+
+  it("binds custom attribute with reactive value and updates on change", () => {
+    const state = new State("initial")
+    inflator.jsxAttributes.set("reactiveProp" as never, context => {
+      context.bind("data-reactive", context.value)
+    })
+    // @ts-expect-error
+    const element = inflator.inflate(<div reactiveProp={state} />)
+    expect(element["data-reactive" as never]).toBe("initial")
+    state.set("updated")
+    expect(element["data-reactive" as never]).toBe("updated")
+  })
+
+  it("custom attribute with side-effect only does not interfere with other bindings", () => {
+    let sideEffect = 0
+    inflator.jsxAttributes.set("tracked" as never, () => { sideEffect++ })
+    // @ts-expect-error
+    const element = inflator.inflate(<div tracked="x" className="foo" />)
+    expect(sideEffect).toBe(1)
+    expect(element.className).toBe("foo")
   })
 
   it("inflates custom element", () => {
@@ -380,7 +563,7 @@ describe("WebInflator", () => {
     expect([...div.childNodes].map(n => n.textContent)).toEqual(["a", "b", "c"])
   })
 
-  it("stops delegated event propagation when cancelBubble is set", () => {
+  it("stops delegated event propagation via stopPropagation", () => {
     const outerEvents: string[] = []
     const innerEvents: string[] = []
 

@@ -68,99 +68,63 @@ describe("ProtonJSX.Element", () => {
     })
   })
 
-  describe("known prop extraction", () => {
-    it("extracts style to top-level", () => {
+  describe("all props stay in element.props", () => {
+    it("contains style", () => {
       const style = { color: "red" }
       const el = Element("div", { style })
-      expect(el.style).toBe(style)
-      expect(el.props).not.toHaveProperty("style")
+      expect(el.props.style).toBe(style)
     })
 
-    it("extracts className to top-level", () => {
+    it("contains className", () => {
       const el = Element("div", { className: "foo" })
-      expect(el.className).toBe("foo")
-      expect(el.props).not.toHaveProperty("className")
+      expect(el.props.className).toBe("foo")
     })
 
-    it("extracts class to top-level", () => {
+    it("contains class", () => {
       const el = Element("div", { class: "bar" })
-      expect(el.class).toBe("bar")
-      expect(el.props).not.toHaveProperty("class")
+      expect(el.props.class).toBe("bar")
     })
 
-    it("extracts ref to top-level", () => {
+    it("contains ref", () => {
       const ref = { current: null }
       const el = Element("div", { ref })
-      expect(el.ref).toBe(ref)
-      expect(el.props).not.toHaveProperty("ref")
+      expect(el.props.ref).toBe(ref)
     })
 
-    it("extracts on to top-level", () => {
+    it("contains on", () => {
       const on = { click: () => {} }
       const el = Element("button", { on })
-      expect(el.on).toBe(on)
-      expect(el.props).not.toHaveProperty("on")
+      expect(el.props.on).toBe(on)
     })
 
-    it("extracts aria to top-level", () => {
+    it("contains aria", () => {
       const aria = { label: "close" }
       const el = Element("button", { aria })
-      expect(el.aria).toBe(aria)
-      expect(el.props).not.toHaveProperty("aria")
+      expect(el.props.aria).toBe(aria)
     })
 
-    it("extracts mounted to top-level", () => {
+    it("contains mounted", () => {
       const mounted = { current: false }
       const el = Element("div", { mounted })
-      expect(el.mounted).toBe(mounted)
-      expect(el.props).not.toHaveProperty("mounted")
+      expect(el.props.mounted).toBe(mounted)
     })
 
-    it("extracts ns to top-level", () => {
+    it("contains ns", () => {
       const el = Element("div", { ns: "http://www.w3.org/2000/svg" })
-      expect(el.ns).toBe("http://www.w3.org/2000/svg")
-    })
-
-    it("skips null known props", () => {
-      const el = Element("div", { className: null, style: null, ref: null })
-      expect(el.className).toBeUndefined()
-      expect(el.style).toBeUndefined()
-      expect(el.ref).toBeUndefined()
-    })
-
-    it("skips undefined known props", () => {
-      const el = Element("div", { className: undefined })
-      expect(el.className).toBeUndefined()
+      expect(el.props.ns).toBe("http://www.w3.org/2000/svg")
     })
   })
 
-  describe("unknown prop pass-through", () => {
-    it("stores unknown props in element.props", () => {
-      const el = Element("div", { id: "main", title: "hi" })
-      expect(el.props).toEqual({ id: "main", title: "hi" })
-    })
-
-    it("stores children in element.props", () => {
-      const el = Element("div", { children: "hello" })
-      expect(el.props).toHaveProperty("children", "hello")
-    })
-
-    it("keeps ns out of element.props (extracted to top-level)", () => {
-      const el = Element("div", { ns: "http://www.w3.org/2000/svg" })
-      expect(el.ns).toBe("http://www.w3.org/2000/svg")
-      expect(el.props).toEqual({})
-    })
-
-    it("mixes known and unknown props correctly", () => {
+  describe("unknown props", () => {
+    it("stores unknown props alongside known", () => {
       const el = Element("a", { className: "link", href: "/", style: { color: "blue" } })
-      expect(el.className).toBe("link")
-      expect(el.style).toEqual({ color: "blue" })
-      expect(el.props).toEqual({ href: "/" })
+      expect(el.props).toEqual({ className: "link", href: "/", style: { color: "blue" } })
     })
 
-    it("sets props to empty when only known props are given", () => {
-      const el = Element("div", { className: "foo", style: { color: "red" } })
-      expect(el.props).toEqual({})
+    it("stores children alongside known", () => {
+      const el = Element("div", { className: "x", children: "hello" })
+      expect(el.props.children).toBe("hello")
+      expect(el.props.className).toBe("x")
     })
   })
 
@@ -181,8 +145,7 @@ describe("JSX syntax integration", () => {
   it("creates elements via JSX transform", () => {
     const el = <div className="test">hello</div>
     expect(el.type).toBe("div")
-    expect(el.className).toBe("test")
-    expect(el.props).toEqual({ children: "hello" })
+    expect(el.props).toEqual({ className: "test", children: "hello" })
   })
 
   it("classifies children via JSX", () => {
@@ -190,12 +153,11 @@ describe("JSX syntax integration", () => {
     expect(el.childrenType).toBe(ChildrenType.Primitive)
   })
 
-  it("extracts known props via JSX", () => {
+  it("retains known props via JSX", () => {
     const on = { click: () => {} }
     const el = <button on={on} aria={{ label: "test" }} />
-    expect(el.on).toBe(on)
-    expect(el.aria).toEqual({ label: "test" })
-    expect(el.props).toEqual({})
+    expect(el.props.on).toBe(on)
+    expect(el.props.aria).toEqual({ label: "test" })
   })
 
   it("retains unknown props via JSX", () => {
