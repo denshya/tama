@@ -363,14 +363,21 @@ class WebInflator extends Inflator {
     }
   }
 
+  private readonly bindContext = { props: {}, key: "", value: null as unknown, bind: (() => { }) as any }
   protected bindCustomAttributes(props: Record<string, any>, node: Element) {
     if (this.jsxAttributes.size === 0) return
     const bind = (key: string, value: unknown) => {
       WebInflator.subscribeProperty(key, value, node)
     }
+
     for (const [key, attributeSetup] of this.jsxAttributes) {
       if (key in props === false) continue
-      attributeSetup({ props, key, value: props[key], bind })
+
+      this.bindContext.bind = bind
+      this.bindContext.props = props
+      this.bindContext.key = key
+      this.bindContext.value = props[key]
+      attributeSetup(this.bindContext)
     }
   }
 
@@ -437,7 +444,7 @@ class WebInflator extends Inflator {
         let ev = (element as any).$EV
         if (ev == null) {
           ev = {}
-          ;(element as any).$EV = ev
+            ; (element as any).$EV = ev
         }
         let handlers = ev[event]
         if (handlers == null) {
@@ -566,11 +573,11 @@ function handleDelegatedEvent(nativeEvent: Event) {
 }
 
 if (!("$EV" in Node.prototype)) {
-  ;(Node.prototype as any).$EV = undefined
+  ; (Node.prototype as any).$EV = undefined
 }
 
 if (!("__tama_delegation" in document)) {
-  ;(document as any).__tama_delegation = true
+  ; (document as any).__tama_delegation = true
   for (const event of DELEGATED_EVENTS) {
     document.addEventListener(event, handleDelegatedEvent)
   }
