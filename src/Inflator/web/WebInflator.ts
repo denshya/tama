@@ -15,9 +15,10 @@ import { isIterable, isJSX, isObservableGetter, isPrimitive, isRecord } from "@/
 import WebNodeBinding from "@/utils/WebNodeBinding"
 
 import { NAMESPACE_MATH, NAMESPACE_SVG } from "./consts"
-import { iterableOf, onDemandRef } from "./helpers"
+import { iterableOf, onDemandRef, truthyNonNull } from "./helpers"
 
 import Inflator from "../Inflator"
+import Null from "@/Null"
 
 
 type WebInflateResult<T> =
@@ -200,14 +201,35 @@ class WebInflator extends Inflator {
 
     if (props.ref != null) ProtonRef.resolve(props.ref, inflated)
 
-    const mountGuard = new MountGuard(inflated)
-    for (const { key, value } of properties) {
-      mountGuard.for(key, value)
+    let mountGuard: MountGuard
+    let immediate = false
+
+    for (const key in props) {
+      const value = props[key]
+
+      if (MountGuard.is(value) === false) continue
+      if (MountGuard.truthy(value)) immediate = true
+
+      mountGuard ??= new MountGuard(inflated)
+      mountGuard.for(value)
     }
-    if (mountGuard.immediate) {
+
+    if (props.mounted != null) {
+      props.mounted.valid ??= truthyNonNull
+
+      if (MountGuard.is(props.mounted)) {
+        if (MountGuard.truthy(props.mounted)) immediate = true
+
+        mountGuard ??= new MountGuard(inflated)
+        mountGuard.for(props.mounted)
+      }
+    }
+
+
+    if (immediate) {
       // @ts-expect-error 123
-      mountGuard.placeholder.current.inflated = inflated
-      return mountGuard.placeholder.current
+      mountGuard!.placeholder.current.inflated = inflated
+      return mountGuard!.placeholder.current
     }
 
     return inflated
@@ -216,6 +238,8 @@ class WebInflator extends Inflator {
   static final = new FinalizationRegistry<Disposal>(disposal => {
     disposal.controller.current.abort()
   })
+
+  private components: ProtonComponent[] = []
 
   public inflateComponent(factory: Function, props?: any) {
     if (this.flags.skipAsync) {
@@ -229,6 +253,8 @@ class WebInflator extends Inflator {
 
     const component = new ProtonComponent(this, this.component)
     const componentGroup = new InsertionGroup
+
+    this.components.push(component)
 
     WebInflator.final.register(componentGroup, component.disposal)
 
@@ -333,13 +359,12 @@ class WebInflator extends Inflator {
     return false
   }
 
-  protected *bindProperties(props: object, inflated: Element, overridden: Set<string>) {
+  protected bindProperties(props: object, inflated: Element, overridden: Set<string>) {
     try {
       let value
+
       for (const key in props) {
         value = props[key as never]
-
-        yield { key, value }
 
         if (key === "children") continue
         if (overridden.has(key)) continue
@@ -350,6 +375,7 @@ class WebInflator extends Inflator {
           WebInflator.subscribeProperty(key, value, inflated)
         }
       }
+
     } catch (error) {
       console.error("Element props binding failed -> ", error)
     }
@@ -438,11 +464,23 @@ class WebInflator extends Inflator {
     return void State.subscribeImmediate(source, targetBindCallback)
   }
 
-  private *__inflateIterable__(iterable: Iterable<unknown>) {
+  private __inflateIterable__(iterable: Iterable<unknown> & { length?: number }) {
+    if (iterable.length === 0) return Null.ARRAY
+
+    const result = new Array
+
     for (const next of iterable) {
       if (next == null) continue
-      yield this.inflate(next)
+
+      const c = this.inflate(next)
+      if (c.nodeType === Node.DOCUMENT_FRAGMENT_NODE && c.childNodes.length === 0) {
+        continue
+      }
+
+      result.push(c)
     }
+
+    return result
   }
 }
 

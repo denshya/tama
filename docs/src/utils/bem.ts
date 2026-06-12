@@ -25,7 +25,11 @@ class BEM {
     const space = " "
     const separator = "--"
 
-    modifiers = modifiers.map(modifier => originClass + separator + modifier)
+    const mappedMods = new Array(modifiers.length).fill("")
+    // modifiers = modifiers.map(modifier => originClass + separator + modifier)
+    for (let i = 0; i < modifiers.length; i++) {
+      mappedMods[i] = originClass + separator + modifiers[i]
+    }
     return originClass + space + modifiers.join(space)
   }
 }
@@ -34,15 +38,18 @@ export const bemTil = new BEM
 
 type BEMElement = string | number | false | null | undefined
 
+function asdasd(this: any[], className?: BEMElement) {
+  return bemTil.modify(className, ...this)
+}
 function bem(classNames: BEMElement | BEMElement[], ...modifiers: (Record<keyof never, boolean | undefined | null | "" | 0> | (BEMElement | BEMElement[]))[]): string {
-  const mods = modifiers.flatMap(modifier => isRecord(modifier) ? Object.entries(modifier).reduce((result, [nextKey, nextValue]) => [...result, nextValue && nextKey], [] as any[]) : modifier)
+  const mods = modifiers.flatMap(/*@hoist*/modifier => isRecord(modifier) ? Object.entries(modifier).reduce((result, [nextKey, nextValue]) => [...result, nextValue && nextKey], [] as any[]) : modifier)
 
-  return bemTil.merge(...castArray(classNames).map(className => bemTil.modify(className, ...mods)))
+  return bemTil.merge(...castArray(classNames).map(asdasd, mods))
 }
 
 export function bemful(input: StateOrPlain<BEMElement> | StateOrPlain<BEMElement>[], ...mods: any[]): State<string> {
   const classNames = castArray(input)
-  const observableMods = mods.flatMap(mod => {
+  const observableMods = mods.flatMap(/*@hoist*/ mod => {
     if (isRecord(mod)) return State.collect(mod)
     if (mod instanceof Array) return State.collect(mod)
 

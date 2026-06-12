@@ -3,12 +3,13 @@ import { defineConfig } from "vite"
 
 import generateBundleMap from "./vite.bundle-map"
 import articleMdx from "./vite.mdx"
+import { tsClosureHoisterPlugin } from "./hoist-pure-functions.vite"
 
 
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [generateBundleMap(), articleMdx()],
+  plugins: [generateBundleMap(), articleMdx(), tsClosureHoisterPlugin()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

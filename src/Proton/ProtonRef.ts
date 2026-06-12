@@ -10,7 +10,7 @@ export namespace ProtonRef {
   /** Works just like JSX `ref` attribute, assigns `value` to given refs. */
   export function resolve<T>(ref: JSX.Ref<T> | JSX.Ref<T>[], value: T): void {
     // Array of refs
-    if (ref instanceof Array) {
+    if (Array.isArray(ref)) {
       for (const r of ref) resolve(r, value)
       return
     }

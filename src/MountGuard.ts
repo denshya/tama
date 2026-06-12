@@ -1,11 +1,11 @@
-import { Accessible } from "./Accessor"
 import { onDemandRef, truthyNonNull } from "./Inflator/web/helpers"
+
 
 /** @internal */
 export class MountGuard {
-  private readonly guards = onDemandRef(() => new Map<string, boolean>())
+  private readonly properties = new Set<object>()
+  private readonly guards = new Set<object>()
   public readonly placeholder = onDemandRef(() => document.createComment(this.constructor.name))
-  public immediate = false
 
   constructor(private readonly element: ChildNode) { }
 
@@ -19,24 +19,39 @@ export class MountGuard {
     source.replaceWith(target)
   }
 
-  for(key: string, property: { valid?: Function, subscribe?: Function, get?: Function }) {
-    if (property == null) return
-    if (typeof property !== "object") return
-
-    if (key === "mounted" && property.valid == null) property.valid = truthyNonNull
-
-    if (typeof property.valid !== "function") return
-    if (property.subscribe == null) return
+  for(property: { valid: Function, subscribe: Function, get?: Function }) {
+    if (this.properties.has(property)) return
+    this.properties.add(property)
 
     property.subscribe((value: any) => {
       const valid = property.valid?.(value)
-      this.guards.current.set(key, valid)
+      if (valid) {
+        this.guards.add(property)
+      } else {
+        this.guards.delete(property)
+      }
 
-      this.toggleMount(this.guards.current.values().every(Boolean))
+      this.toggleMount(this.guards.size >= this.properties.size)
     })
+  }
 
+  static is(property: { valid?: Function, subscribe?: Function, get?: Function }) {
+    if (property == null) return false
+    if (typeof property !== "object") return false
+
+    // if (key === "mounted" && property.valid == null) property.valid = truthyNonNull
+
+    if (typeof property.valid !== "function") return false
+    if (property.subscribe == null) return false
+
+    return true
+  }
+
+  static truthy(property: { valid: Function, subscribe?: Function, get?: Function }) {
     if (property.valid(property.get?.() ?? property.valueOf()) === false) {
-      this.immediate = true
+      return true
     }
+
+    return false
   }
 }
