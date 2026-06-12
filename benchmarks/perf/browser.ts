@@ -5,14 +5,14 @@ import { resolve } from "path";
 const rawPath = Bun.argv[2];
 
 if (!rawPath) {
-  console.error("❌ Error: Please provide a target file. Example: bun scripts/browser.ts ./some.ts");
+  console.error("Error: Please provide a target file. Example: bun scripts/browser.ts ./some.ts");
   process.exit(1);
 }
 
 const targetFile = resolve(process.cwd(), rawPath);
 
 if (!(await Bun.file(targetFile).exists())) {
-  console.error(`❌ Error: File not found at absolute path: "${targetFile}"`);
+  console.error(`Error: File not found at absolute path: "${targetFile}"`);
   console.error(`Current Working Directory: "${process.cwd()}"`);
   process.exit(1);
 }
@@ -26,8 +26,6 @@ const startTime = Date.now();
 let currentRun = 1;
 let run3StartTime = 0;
 let controlResolve: ((cmd: string) => void) | null = null;
-
-console.log(`🔥 Warmup Run 1/2 starting...`);
 
 // 2. Spin up the local dev server
 const server = Bun.serve({
@@ -132,7 +130,7 @@ const server = Bun.serve({
                 const paintObserver = new PerformanceObserver((entryList) => {
                   for (const entry of entryList.getEntries()) {
                     if (entry.name === 'first-contentful-paint') {
-                      console.log(\`⏱️ FCP: \${entry.startTime.toFixed(2)}ms\`);
+                      console.log(\`FCP: \${entry.startTime.toFixed(2)}ms\`);
                     }
                   }
                 });
@@ -142,12 +140,12 @@ const server = Bun.serve({
                   const entries = entryList.getEntries();
                   if (entries.length > 0) {
                     const lastEntry = entries[entries.length - 1];
-                    console.log(\`⏱️ LCP: \${lastEntry.startTime.toFixed(2)}ms\`);
+                    console.log(\`LCP: \${lastEntry.startTime.toFixed(2)}ms\`);
                   }
                 });
                 lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true });
               } catch (e) {
-                _log('⚠️ PerformanceObserver metrics initialization failed:', e);
+                _log('PerformanceObserver metrics initialization failed:', e);
               }
 
               // Listen for instruction reload signals from Bun
@@ -164,7 +162,7 @@ const server = Bun.serve({
 
               // Automatically catch and route unhandled browser runtime errors
               window.addEventListener('error', (e) => {
-                console.log('❌ Browser Runtime Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno);
+                console.log('Browser Runtime Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno);
               });
             </script>
           </head>
@@ -204,7 +202,7 @@ const server = Bun.serve({
       });
 
       if (!build.success) {
-        console.error("❌ Bun build failed:");
+        console.error("Bun build failed:");
         console.error(build.logs.join("\n"));
         return new Response("Build Error", { status: 500 });
       }
@@ -224,48 +222,46 @@ const browserProcess = spawn({
   stderr: "ignore",
 });
 
-// 4. Inactivity Watchdog & Multi-Run Orchestrator
-const watchdog = setInterval(() => {
-  if (!hasStarted) {
-    // Fail safe if browser doesn't send logs within 7 seconds of starting
-    if (Date.now() - startTime > 7000) {
-      console.error("❌ Error: Browser timed out before producing any logs.");
-      cleanup();
-      process.exit(1);
-    }
-    return;
-  }
+// // 4. Inactivity Watchdog & Multi-Run Orchestrator
+// const watchdog = setInterval(() => {
+//   if (!hasStarted) {
+//     // Fail safe if browser doesn't send logs within 7 seconds of starting
+//     if (Date.now() - startTime > 7000) {
+//       console.error("Error: Browser timed out before producing any logs.");
+//       cleanup();
+//       process.exit(1);
+//     }
+//     return;
+//   }
 
-  // Shut down or reload browser if we detect 1.5 seconds of absolute silence
-  if (Date.now() - lastLogTime > 1500) {
-    if (currentRun < 3) {
-      if (controlResolve) {
-        const finishedRun = currentRun;
-        currentRun++;
-        hasStarted = false;
-        lastLogTime = Date.now();
+//   // Shut down or reload browser if we detect 1.5 seconds of absolute silence
+//   if (Date.now() - lastLogTime > 1500) {
+//     if (currentRun < 3) {
+//       if (controlResolve) {
+//         const finishedRun = currentRun;
+//         currentRun++;
+//         hasStarted = false;
+//         lastLogTime = Date.now();
 
-        console.log(`✨ Warmup Run ${finishedRun}/2 completed.`);
-        if (currentRun === 3) {
-          console.log(`\n⚡ Run 3/3 (Active Performance Run):`);
-        } else {
-          console.log(`🔥 Warmup Run ${currentRun}/2 starting...`);
-        }
+//         console.log(`Warmup Run ${finishedRun}/2.`);
+//         if (currentRun === 3) {
+//           console.log(`\nRun 3/3 (Active Performance Run):`);
+//         }
 
-        controlResolve("reload");
-        controlResolve = null;
-      }
-    } else {
-      const duration = lastLogTime - run3StartTime;
-      console.log(`\n⏱️ Main code execution duration: ${duration}ms`);
-      cleanup();
-      process.exit(0);
-    }
-  }
-}, 200);
+//         controlResolve("reload");
+//         controlResolve = null;
+//       }
+//     } else {
+//       const duration = lastLogTime - run3StartTime;
+//       console.log(`Main code execution duration: ${duration}ms`);
+//       cleanup();
+//       process.exit(0);
+//     }
+//   }
+// }, 200);
 
 function cleanup() {
-  clearInterval(watchdog);
+  // clearInterval(watchdog);
   browserProcess.kill();
   server.stop();
 }

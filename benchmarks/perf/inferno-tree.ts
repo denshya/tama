@@ -1,6 +1,3 @@
-import "./happydom"
-import { bench } from "benchik"
-import { render } from "inferno"
 import { h } from "inferno-hyperscript"
 
 export function createLearnPageInferno() {
@@ -176,7 +173,6 @@ export function createLearnPageInferno() {
   ])
 }
 
-
 // ─── Full Inferno tree with components and style objects ─────────
 
 function ITopbar() {
@@ -211,7 +207,7 @@ function ITopbar() {
 }
 
 function ISidebar() {
-  let expanded = new Set(["getting-started"])
+  const expanded = new Set(["getting-started"])
   const toggleGS = () => {
     expanded.has("getting-started") ? expanded.delete("getting-started") : expanded.add("getting-started")
   }
@@ -374,62 +370,4 @@ export function createLearnPageInfernoFull() {
     ]),
     h(IFooter, null),
   ])
-}
-
-
-const mountTarget = document.createElement("div")
-document.body.appendChild(mountTarget)
-
-await bench.untilCompiled()
-
-// ─── Group A: VNode / JSX Creation ──────────────────────────────
-{
-  using g = bench.group("VNode Creation")
-
-  bench("Inferno h() (static)", () => {
-    createLearnPageInferno()
-  })
-
-  bench("Inferno h() (full)", () => {
-    createLearnPageInfernoFull()
-  })
-}
-
-
-// ─── Group B: Render (VNode → attached DOM, fresh container) ────
-{
-  using g = bench.group("Render (fresh container)")
-  const f = g.fresh(() => ({
-    static: createLearnPageInferno(),
-    full: createLearnPageInfernoFull(),
-    container: document.createElement("div"),
-  }))
-
-  bench("Inferno.render (static)", () => {
-    render(f.static, f.container)
-  })
-
-  bench("Inferno.render (full)", () => {
-    render(f.full, f.container)
-  })
-}
-
-// ─── Group C: Mount (VNode → live document) ─────────────────────
-{
-  using g = bench.group("Mount")
-  const f = g.fresh(() => ({
-    static: createLearnPageInferno(),
-    full: createLearnPageInfernoFull(),
-    container: document.createElement("div"),
-  }))
-
-  bench("Inferno.render → mountTarget (static)", () => {
-    render(f.static, f.container)
-    mountTarget.replaceChildren(f.container.firstElementChild!)
-  })
-
-  bench("Inferno.render → mountTarget (full)", () => {
-    render(f.full, f.container)
-    mountTarget.replaceChildren(f.container.firstElementChild!)
-  })
 }
