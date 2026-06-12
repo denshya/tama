@@ -30,7 +30,7 @@ class BEM {
     for (let i = 0; i < modifiers.length; i++) {
       mappedMods[i] = originClass + separator + modifiers[i]
     }
-    return originClass + space + modifiers.join(space)
+    return originClass + space + mappedMods.join(space)
   }
 }
 

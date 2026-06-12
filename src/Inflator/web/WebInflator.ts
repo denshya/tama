@@ -245,59 +245,71 @@ class WebInflator extends Inflator {
    */
   public inflateIntrinsic(jsx: JSX.Element): Element | Comment {
     const type = jsx.type as string
-    const ns = jsx.ns as string | undefined
-    const inflated = this.inflateElement(type, { namespace: ns })
-
-    const isSVG = inflated instanceof SVGElement
     const props = jsx.props as Record<string, any> | null | undefined
 
-    if (props == null && jsx.ref == null && jsx.className == null && jsx.class == null && jsx.style == null && jsx.on == null && jsx.aria == null && jsx.mounted == null) return inflated
+    if (props == null) return this.inflateElement(type)
 
-    // ref
-    if (jsx.ref != null) ProtonRef.resolve(jsx.ref, inflated)
+    const isSVG = type === "svg" || NAMESPACE_SVG.has(type)
+    const inflated = this.inflateElement(type, props.ns != null ? { namespace: props.ns as string } : undefined)
 
-    if (jsx.className != null || jsx.class != null) this.bindClassName(jsx.className ?? jsx.class, inflated, isSVG)
-    if (jsx.style != null) this.bindStyle(jsx.style, inflated.style)
-    if (jsx.on != null) this.bindEventListeners(jsx.on, inflated)
-    if (jsx.aria != null) this.bindNodeAria(jsx.aria, inflated)
-
-    // Unknown props + MountGuard
     let mountGuard: MountGuard | undefined
     let immediate = false
 
-    if (props != null) {
-      for (const key in props) {
-        if (key === "children" || key === "ns") continue
-        const value = props[key]
-        if (MountGuard.is(value)) {
-          mountGuard ??= new MountGuard(inflated)
-          if (MountGuard.truthy(value)) immediate = true
-          mountGuard.for(value)
-          continue
+    for (const key in props) {
+      if (key === "children" || key === "ns") continue
+      const value = props[key]
+
+      if (MountGuard.is(value)) {
+        mountGuard ??= new MountGuard(inflated)
+        if (MountGuard.truthy(value)) immediate = true
+        mountGuard.for(value)
+        continue
+      }
+
+      if (key === "ref") {
+        if (value != null) ProtonRef.resolve(value, inflated)
+        continue
+      }
+      if (key === "className" || key === "class") {
+        if (value != null) this.bindClassName(value, inflated, isSVG)
+        continue
+      }
+      if (key === "style") {
+        if (value != null) this.bindStyle(value, inflated.style)
+        continue
+      }
+      if (key === "on") {
+        this.bindEventListeners(value, inflated)
+        continue
+      }
+      if (key === "aria") {
+        if (isRecord(value)) this.bindNodeAria(value, inflated)
+        continue
+      }
+      if (key === "mounted") {
+        if (value != null) {
+          (value as any).valid ??= truthyNonNull
+          if (MountGuard.is(value)) {
+            if (MountGuard.truthy(value)) immediate = true
+            mountGuard ??= new MountGuard(inflated)
+            mountGuard.for(value)
+          }
         }
-        if (typeof value !== "object" && typeof value !== "function" && value != null) {
-          if (isSVG || key.includes("-")) inflated.setAttribute(key, value as string)
-          else (inflated as any)[key] = value
-        } else if (value != null) {
-          if (isSVG || key.includes("-")) WebInflator.subscribeAttribute(inflated, key, value)
-          else WebInflator.subscribeProperty(key, value, inflated)
-        }
+        continue
+      }
+
+      // Unknown props — bind as attribute or property
+      if (typeof value !== "object" && typeof value !== "function" && value != null) {
+        if (isSVG || key.includes("-")) inflated.setAttribute(key, value as string)
+        else (inflated as any)[key] = value
+      } else if (value != null) {
+        if (isSVG || key.includes("-")) WebInflator.subscribeAttribute(inflated, key, value)
+        else WebInflator.subscribeProperty(key, value, inflated)
       }
     }
 
     this.bindFormControls(type, props, inflated)
-    if (props != null) this.bindCustomAttributes(props, inflated)
-
-    // mounted
-    const mounted = jsx.mounted
-    if (mounted != null) {
-      (mounted as any).valid ??= truthyNonNull
-      if (MountGuard.is(mounted)) {
-        if (MountGuard.truthy(mounted)) immediate = true
-        mountGuard ??= new MountGuard(inflated)
-        mountGuard.for(mounted)
-      }
-    }
+    this.bindCustomAttributes(props, inflated)
 
     if (immediate) {
       (mountGuard!).placeholder.current.inflated = inflated
