@@ -334,14 +334,16 @@ class WebInflator extends Inflator {
     if (isRecord(style)) {
       for (const property in style) {
         if (property.startsWith("--")) {
-          WebInflator.subscribe(style[property], value => element.setProperty(property, value as string))
+          const sub = WebInflator.subscribe(style[property], value => element.setProperty(property, value as string))
+          if (sub != null) WebInflator.trackSubscription(element, sub)
           continue
         }
         WebInflator.subscribeProperty(property, style[property], element)
       }
       return
     }
-    WebInflator.subscribe(style, value => element.cssText = value as string)
+    const sub = WebInflator.subscribe(style, value => element.cssText = value as string)
+    if (sub != null) WebInflator.trackSubscription(element, sub)
   }
 
   protected bindNodeAria(aria: Record<string, unknown>, node: Element) {
@@ -439,7 +441,7 @@ class WebInflator extends Inflator {
   }
 
   protected bindEventListeners(listeners: unknown, element: Element) {
-    for (const [event, handler] of WebInflator.iterateEventBindings(listeners)) {
+    WebInflator.forEachEventBinding(listeners, (event, handler) => {
       if (DELEGATED_EVENTS.has(event)) {
         let ev = (element as any).$EV
         if (ev == null) {
@@ -455,15 +457,18 @@ class WebInflator extends Inflator {
       } else {
         element.addEventListener(event, handler)
       }
-    }
+    })
   }
 
-  private static *iterateEventBindings(source: unknown): Iterable<[string, EventListenerOrEventListenerObject]> {
+  private static forEachEventBinding(
+    source: unknown,
+    callback: (event: string, handler: EventListenerOrEventListenerObject) => void,
+  ): void {
     if (source == null) return
 
     if (Array.isArray(source)) {
       for (const entry of source) {
-        yield* WebInflator.iterateEventBindings(entry)
+        WebInflator.forEachEventBinding(entry, callback)
       }
       return
     }
@@ -471,22 +476,26 @@ class WebInflator extends Inflator {
     if (isRecord(source) === false) return
 
     for (const key in source) {
-      yield* WebInflator.iterateEventBindingValue(key, (source as Record<string, unknown>)[key])
+      WebInflator.forEachEventBindingValue(key, (source as Record<string, unknown>)[key], callback)
     }
   }
 
-  private static *iterateEventBindingValue(event: string, value: unknown): Iterable<[string, EventListenerOrEventListenerObject]> {
+  private static forEachEventBindingValue(
+    event: string,
+    value: unknown,
+    callback: (event: string, handler: EventListenerOrEventListenerObject) => void,
+  ): void {
     if (value == null) return
 
     if (Array.isArray(value)) {
       for (const entry of value) {
-        yield* WebInflator.iterateEventBindingValue(event, entry)
+        WebInflator.forEachEventBindingValue(event, entry, callback)
       }
       return
     }
 
     if (WebInflator.isEventListener(value)) {
-      yield [event, value]
+      callback(event, value)
     }
   }
 
@@ -500,34 +509,47 @@ class WebInflator extends Inflator {
     return false
   }
 
+  private static subscriptions = new Map<object, { unsubscribe(): void }[]>
+
+  private static trackSubscription(target: object, sub: { unsubscribe(): void }) {
+    let subs = WebInflator.subscriptions.get(target)
+    if (subs == null) {
+      subs = []
+      WebInflator.subscriptions.set(target, subs)
+    }
+    subs.push(sub)
+  }
+
   /**
    * Binds a property.
    */
   static subscribeProperty(key: keyof never, source: unknown, target: unknown): void {
-    WebInflator.subscribe(source, value => (target as any)[key] = value)
+    const sub = WebInflator.subscribe(source, value => (target as any)[key] = value)
+    if (sub != null) WebInflator.trackSubscription(target as object, sub)
   }
 
   /**
    * Binds an attribute.
    */
   static subscribeAttribute(target: Element, key: string, value: unknown): void {
-    WebInflator.subscribe(value, value => {
+    const sub = WebInflator.subscribe(value, value => {
       if (value != null) {
         target.setAttribute(key, value as string)
       } else {
         target.removeAttribute(key)
       }
     })
+    if (sub != null) WebInflator.trackSubscription(target, sub)
   }
 
   /** @internal */
-  protected static subscribe(source: unknown, targetBindCallback: (value: unknown) => void): void {
+  protected static subscribe(source: unknown, targetBindCallback: (value: unknown) => void): { unsubscribe(): void } | void {
     if (source == null) return
     if (typeof source !== "object" && typeof source !== "function") {
       targetBindCallback(source)
       return
     }
-    return void State.subscribeImmediate(source, targetBindCallback)
+    return State.subscribeImmediate(source, targetBindCallback)
   }
 
   private __inflateIterable__(iterable: Iterable<unknown> & { length?: number }) {
