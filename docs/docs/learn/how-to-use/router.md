@@ -170,10 +170,10 @@ function NavLink(this: Tama.Component, props: { to: string; children: unknown })
   return (
     <a
       href={props.to}
-      class={isActive.to(v => v ? "nav-link active" : "nav-link")}
+      className={isActive.to(x => x ? "nav-link active" : "nav-link")}
       on={{
-        click: (e: Event) => {
-          e.preventDefault()
+        click: event => {
+          event.preventDefault()
           navigation.navigate(props.to)
         },
       }}
