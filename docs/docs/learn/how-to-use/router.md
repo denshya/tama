@@ -157,3 +157,31 @@ One current implementation detail to keep in mind: `RouteNavigation` expects you
 - Route context is just tree context, so nested pages can read params directly.
 - Async page components make route-level loading straightforward.
 - `this.view.set(...)` gives layout shells a direct way to swap sections.
+
+### Active Link Styling with `whenWithin()`
+
+Use `navigation.whenWithin()` to create reactive active states for navigation links:
+
+```tsx
+function NavLink(this: Tama.Component, props: { to: string; children: unknown }) {
+  const navigation = this.tree.context.require(RouteNavigation)
+  const isActive = navigation.whenWithin(props.to)
+
+  return (
+    <a
+      href={props.to}
+      class={isActive.to(v => v ? "nav-link active" : "nav-link")}
+      on={{
+        click: (e: Event) => {
+          e.preventDefault()
+          navigation.navigate(props.to)
+        },
+      }}
+    >
+      {props.children}
+    </a>
+  )
+}
+```
+
+`whenWithin()` returns a `State<boolean>` that updates when the URL changes, making it perfect for reactive active link styling.
