@@ -87,7 +87,7 @@ declare global {
     type Children<T extends JSX.Element> = T | Iterable<T>
 
     type HTMLElementEvents = {
-      [K in keyof HTMLElementEventMap]?: (event: HTMLElementEventMap[K]) => void
+      [K in keyof HTMLElementEventMap]?: ((event: HTMLElementEventMap[K]) => void) | readonly ((event: HTMLElementEventMap[K]) => void)[]
     }
 
     interface IntrinsicAttributes {
