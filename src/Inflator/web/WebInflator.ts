@@ -334,16 +334,14 @@ class WebInflator extends Inflator {
     if (isRecord(style)) {
       for (const property in style) {
         if (property.startsWith("--")) {
-          const sub = WebInflator.subscribe(style[property], value => element.setProperty(property, value as string))
-          if (sub != null) WebInflator.trackSubscription(element, sub)
+          WebInflator.subscribe(style[property], function (value) { this.setProperty(property, value as string) }, element)
           continue
         }
         WebInflator.subscribeProperty(property, style[property], element)
       }
       return
     }
-    const sub = WebInflator.subscribe(style, value => element.cssText = value as string)
-    if (sub != null) WebInflator.trackSubscription(element, sub)
+    WebInflator.subscribe(style, function (value) { this.cssText = value as string }, element)
   }
 
   protected bindNodeAria(aria: Record<string, unknown>, node: Element) {
@@ -524,32 +522,34 @@ class WebInflator extends Inflator {
    * Binds a property.
    */
   static subscribeProperty(key: keyof never, source: unknown, target: unknown): void {
-    const sub = WebInflator.subscribe(source, value => (target as any)[key] = value)
-    if (sub != null) WebInflator.trackSubscription(target as object, sub)
+    WebInflator.subscribe(source, function (value) { (this as any)[key] = value }, target)
   }
 
   /**
    * Binds an attribute.
    */
   static subscribeAttribute(target: Element, key: string, value: unknown): void {
-    const sub = WebInflator.subscribe(value, value => {
+    WebInflator.subscribe(value, function (value) {
       if (value != null) {
-        target.setAttribute(key, value as string)
+        this.setAttribute(key, value as string)
       } else {
-        target.removeAttribute(key)
+        this.removeAttribute(key)
       }
-    })
-    if (sub != null) WebInflator.trackSubscription(target, sub)
+    }, target)
   }
 
   /** @internal */
-  protected static subscribe(source: unknown, targetBindCallback: (value: unknown) => void): { unsubscribe(): void } | void {
+  protected static subscribe<S>(source: unknown, targetBindCallback: (this: S, value: unknown) => void, thisArg?: S): { unsubscribe(): void } | void {
     if (source == null) return
     if (typeof source !== "object" && typeof source !== "function") {
-      targetBindCallback(source)
+      targetBindCallback.call(thisArg, source)
       return
     }
-    return State.subscribeImmediate(source, targetBindCallback)
+    const unsub = State.subscribeImmediate(source, thisArg != null ? targetBindCallback.bind(thisArg) : targetBindCallback)
+    if (unsub != null && thisArg != null) {
+      WebInflator.trackSubscription(thisArg, unsub)
+    }
+    return unsub
   }
 
   private __inflateIterable__(iterable: Iterable<unknown> & { length?: number }) {
