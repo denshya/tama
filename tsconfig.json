@@ -30,6 +30,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "stripInternal": true,
+    "isolatedDeclarations": true,
     "declaration": true,
     "emitDeclarationOnly": true,
     "outDir": "build",

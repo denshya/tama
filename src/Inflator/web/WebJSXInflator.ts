@@ -7,7 +7,7 @@ interface JSN {
   children?: Iterable<JSN>
 }
 
-export function inflateElement(jsn: JSN, hook: (node: Node, jsn: JSN) => void, doc = document): Node {
+export function inflateElement(jsn: JSN, hook: (node: Node, jsn: JSN) => void, doc: Document = document): Node {
   // Base cases
   if (jsn == null) return doc.createTextNode("") // null/undefined -> empty text
   if (typeof jsn === "string" || typeof jsn === "number" || typeof jsn === "bigint") {

@@ -22,7 +22,7 @@ function getNativeDescriptor(instance: Node, property: keyof never): PropertyDes
 
 /** @internal */
 namespace WebNodeBinding {
-  export function dualSignalBind<T extends Node>(node: T, key: string, value: unknown, changeEventKey: string) {
+  export function dualSignalBind<T extends Node>(node: T, key: string, value: unknown, changeEventKey: string): void {
     const accessor = value
     if (!isObservableGetter(accessor)) return
 

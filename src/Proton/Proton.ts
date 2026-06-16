@@ -3,4 +3,4 @@ import { ProtonLazy as Lazy } from "./ProtonLazy"
 import { ProtonRef as Ref } from "./ProtonRef"
 import { ProtonSwitch as Switch } from "./ProtonSwitch"
 
-export default { Lazy, Dynamic, Switch, Ref }
+export default { Lazy, Dynamic, Switch, Ref } as never // Handled by Proton.d.ts

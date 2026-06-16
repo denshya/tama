@@ -51,13 +51,13 @@ namespace ProtonJSX {
   type Props = Record<keyof never, unknown> & JSX.CustomAttributes & { children?: Children }
   type Children = (Node | Primitive) | (Node | Primitive)[]
 
-  export function Element(type: keyof never | Function | Node, rawProps: Props | null) {
+  export function Element(type: keyof never | Function | Node, rawProps: Props | null): JSX.Element {
     const props = (rawProps ?? {}) as Record<string, any>
     const element: JSX.Element = { type, props }
     element.childrenType = classifyChildren(props.children)
     return element
   }
-  export const FragmentSymbol = Symbol.for("Tama.Fragment")
+  export const FragmentSymbol: unique symbol = Symbol.for("Tama.Fragment")
 }
 
 export default ProtonJSX

@@ -24,7 +24,7 @@ export class EventDelegator {
    * listeners are registered for delegation; otherwise a no-op unsubscribe is returned.
    * Returns an unsubscribe function that removes this registration.
    */
-  public delegate(listeners: EventListenerMap, element: Element) {
+  public delegate(listeners: EventListenerMap, element: Element): void {
     if (!this.root) {
       // No delegation parent configured — nothing to do. Return no-op unsubscribe.
       // return () => { }

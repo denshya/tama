@@ -25,15 +25,15 @@ export class ProtonComponent {
 class TreeAPI {
   public readonly context: TreeContextAPI
 
-  constructor(private readonly parent?: TreeAPI) {
+  constructor(private readonly parent: TreeAPI | undefined) {
     this.context = new TreeContextAPI(this.parent?.context)
 
     parent?.thrown.subscribe(this.thrown.dispatch.bind(this.thrown))
   }
 
   /** @internal */
-  readonly thrown = new Messager<unknown>
+  readonly thrown: Messager<unknown> = new Messager<unknown>
   /** @internal */
-  caught(thrown: unknown) { this.thrown.dispatch(thrown) }
-  catch(callback: (thrown: unknown) => void) { void this.thrown.subscribe(callback) }
+  caught(thrown: unknown): void { this.thrown.dispatch(thrown) }
+  catch(callback: (thrown: unknown) => void): void { void this.thrown.subscribe(callback) }
 }

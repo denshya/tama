@@ -9,7 +9,7 @@ class ViewAPI extends EventSignal<unknown> {
 
   constructor() { super(null) }
 
-  async setIterable(iterable: Iterator<unknown> | AsyncIterator<unknown>) {
+  async setIterable(iterable: Iterator<unknown> | AsyncIterator<unknown>): Promise<void> {
     let yieldResult: IteratorResult<unknown> = { done: false, value: undefined }
     while (yieldResult.done === false) {
       yieldResult = await iterable.next()
@@ -18,7 +18,7 @@ class ViewAPI extends EventSignal<unknown> {
   }
 
   /** @internal */
-  async initWith(returnResult: unknown) {
+  async initWith(returnResult: unknown): Promise<void> {
     if (returnResult == null) return
     if (returnResult.constructor === AsyncGeneratorPrototype) {
       await this.setIterable(returnResult as any)

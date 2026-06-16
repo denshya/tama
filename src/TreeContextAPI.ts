@@ -5,7 +5,7 @@ class TreeContextError extends Error { }
 class TreeContextAPI {
   private readonly contexts = new Map<TreeContext, InstanceType<TreeContext>>()
 
-  constructor(readonly parent?: TreeContextAPI) { }
+  constructor(readonly parent: TreeContextAPI | undefined) { }
 
   provide<T extends InstanceType<TreeContext>>(context: T extends TreeContext ? never : T): T {
     this.contexts.set((context as any).constructor, context)

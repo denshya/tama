@@ -5,7 +5,7 @@ import { onDemandRef, truthyNonNull } from "./Inflator/web/helpers"
 export class MountGuard {
   private readonly properties = new Set<object>()
   private readonly guards = new Set<object>()
-  public readonly placeholder = onDemandRef(() => document.createComment(this.constructor.name))
+  public readonly placeholder: { current: Comment } = onDemandRef(() => document.createComment(this.constructor.name))
 
   constructor(private readonly element: ChildNode) { }
 
@@ -19,7 +19,7 @@ export class MountGuard {
     source.replaceWith(target)
   }
 
-  for(property: { valid: Function, subscribe: Function, get?: Function }) {
+  for(property: { valid: Function, subscribe: Function, get?: Function }): void {
     if (this.properties.has(property)) return
     this.properties.add(property)
 
@@ -35,7 +35,7 @@ export class MountGuard {
     })
   }
 
-  static is(property: { valid?: Function, subscribe?: Function, get?: Function }) {
+  static is(property: { valid?: Function, subscribe?: Function, get?: Function }): boolean {
     if (property == null) return false
     if (typeof property !== "object") return false
 
@@ -47,7 +47,7 @@ export class MountGuard {
     return true
   }
 
-  static truthy(property: { valid: Function, subscribe?: Function, get?: Function }) {
+  static truthy(property: { valid: Function, subscribe?: Function, get?: Function }): boolean {
     if (property.valid(property.get?.() ?? property.valueOf()) === false) {
       return true
     }

@@ -1,4 +1,4 @@
-export const truthyNonNull = (value: unknown) => typeof value === "boolean" ? value : value != null
+export const truthyNonNull: (value: unknown) => boolean = (value: unknown) => typeof value === "boolean" ? value : value != null
 
 
 export function iterableOf(object: object): IteratorObject<any> {
@@ -14,11 +14,11 @@ export function iterableOf(object: object): IteratorObject<any> {
 /**
  * Creates reference only when it's first accessed.
  */
-export function onDemandRef<T>(factory: () => T) {
+export function onDemandRef<T>(factory: () => T): { current: T } {
   let value: T | null = null
 
   return {
-    get current() {
+    get current(): T {
       if (value === null) value = factory()
       return value
     }

@@ -26,7 +26,7 @@ class TransitionAPI extends Set<ViewTransitionEntry> {
   /**
    * Replaces current handlers with a new iterable of handlers.
    */
-  replaceWith(entries: Iterable<ViewTransitionEntry> | null | undefined) {
+  replaceWith(entries: Iterable<ViewTransitionEntry> | null | undefined): this {
     this.clear()
     if (entries == null) return this
 
@@ -38,7 +38,7 @@ class TransitionAPI extends Set<ViewTransitionEntry> {
   }
 
   /** @internal */
-  markPending(previous: unknown, next: unknown) {
+  markPending(previous: unknown, next: unknown): void {
     if (this.size === 0) {
       this.reset()
       return
@@ -49,7 +49,7 @@ class TransitionAPI extends Set<ViewTransitionEntry> {
   }
 
   /** @internal */
-  markRunning(previous: unknown, next: unknown) {
+  markRunning(previous: unknown, next: unknown): void {
     if (this.size === 0) {
       this.reset()
       return
@@ -60,7 +60,7 @@ class TransitionAPI extends Set<ViewTransitionEntry> {
   }
 
   /** @internal */
-  markFinished() {
+  markFinished(): void {
     if (this.snapshot != null) this.snapshot.finishedAt = Date.now()
     this.reset()
   }

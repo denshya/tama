@@ -4,7 +4,7 @@ import { State } from "@denshya/reactive"
 type ConnectionSet = Set<(connected: boolean) => void> & { connected?: boolean }
 
 export namespace ElementLifecycle {
-  export function connection(element: Element) {
+  export function connection(element: Element): ElementConnection {
     return new ElementConnection(element)
   }
 }
@@ -30,7 +30,7 @@ class ElementConnection {
   private static resizeObserver = new ResizeObserver(ElementConnection.watch)
   private static intersectionObserver = new IntersectionObserver(ElementConnection.watch)
 
-  readonly state = new State(false)
+  readonly state: State<boolean> = new State(false)
 
   constructor(private readonly element: Element) {
     let subs = ElementConnection.subscriptions.get(this.element)

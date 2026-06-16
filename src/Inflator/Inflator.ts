@@ -8,7 +8,7 @@ import InflatorAdaptersMap from "./InflatorAdaptersMap"
 
 
 abstract class Inflator {
-  adapters = new InflatorAdaptersMap(this)
+  adapters: InflatorAdaptersMap = new InflatorAdaptersMap(this)
 
   public inflate(subject: unknown): unknown {
     for (const adapter of this.adapters.values()) {

@@ -3,11 +3,11 @@ import { State } from "@denshya/reactive"
 type FallbackResult = Error | Promise<unknown> | true | null
 
 export class Fallback<ErrorView = unknown, PendingView = unknown> {
-  readonly error = new State<Error | null>(null)
-  readonly pending = new State<boolean | Promise<unknown>>(false)
+  readonly error: State<Error | null> = new State<Error | null>(null)
+  readonly pending: State<boolean | Promise<unknown>> = new State<boolean | Promise<unknown>>(false)
 
   /** @internal */
-  readonly result = State.combine([this.error, this.pending], (error, pending) => error ?? (pending || null))
+  readonly result: State<Error | boolean | Promise<unknown> | null> = State.combine([this.error, this.pending], (error, pending) => (error ?? (pending || null)) as never)
 
   constructor(public views: { error: ErrorView, pending: PendingView }) { }
 

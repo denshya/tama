@@ -9,7 +9,7 @@ import WebJSXSerializer from "./JSXSerializer"
 class WebJSXSerializerAsync {
   protected inflator?: WebInflator
   /** Inherits customization and options applied to `inflator`. */
-  inherit(inflator: WebInflator) {
+  inherit(inflator: WebInflator): void {
     this.inflator = inflator
   }
 
@@ -44,7 +44,7 @@ class WebJSXSerializerAsync {
     return String(value)
   }
 
-  async iterableToStringAsync(iterable: Iterable<unknown>) {
+  async iterableToStringAsync(iterable: Iterable<unknown>): Promise<string> {
     let children = ""
     for (const item of iterable) children += await this.asyncToString(item)
     return children

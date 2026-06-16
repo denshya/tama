@@ -40,10 +40,10 @@ export class Lifecycle {
     this.fsm = { ...arg }
   }
 
-  enter() {
+  enter(): void {
     this.fsm.onEnter?.()
   }
-  exit() {
+  exit(): void {
     this.fsm.onExit?.()
   }
 }
