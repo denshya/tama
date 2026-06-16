@@ -53,7 +53,7 @@ export class ProtonSwitch<T extends Record<keyof never | "default", unknown> = a
     this.current = { key: "default", value: cases["default"] as never }
   }
 
-  set(key: keyof T) {
+  set(key: keyof T): void {
     this.current.key = key
     this.current.value = this.cases[key as never]
 
@@ -72,11 +72,11 @@ export class ProtonSwitch<T extends Record<keyof never | "default", unknown> = a
     })
   }
 
-  subscribe(next: () => void) { return this.notifier.subscribe(next) }
+  subscribe(next: () => void): Subscription { return this.notifier.subscribe(next) }
 }
 
 export class ProtonSwitchWebInflator extends InflatorAdapter {
-  inflate(switcher: unknown) {
+  inflate(switcher: unknown): unknown {
     if (switcher instanceof ProtonSwitch === false) return
 
     let previousKey = switcher.current.key

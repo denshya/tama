@@ -12,7 +12,7 @@ interface WebInflatorBased {
 class WebJSXSerializer {
   protected inflator?: WebInflator
   /** Inherits customization and options applied to `inflator`. */
-  inherit(inflator: WebInflator) {
+  inherit(inflator: WebInflator): void {
     inflator.flags.skipAsync = true
     this.inflator = inflator
   }
@@ -47,7 +47,7 @@ class WebJSXSerializer {
     return children
   }
 
-  jsxAttributesToString = WebJSXSerializer.jsxAttributesToString
+  jsxAttributesToString: (this: WebInflatorBased, props: any) => string = WebJSXSerializer.jsxAttributesToString
 
   jsxToString(jsx: JSX.Element): string {
     if (jsx.props == null) {
@@ -78,7 +78,7 @@ class WebJSXSerializer {
     return "<" + type + attributes + ">" + children + "</" + type + ">"
   }
 
-  componentToString(factory: Function, props?: any) {
+  componentToString(factory: Function, props?: any): string {
     if (factory instanceof AsyncFunction.constructor) return ""
     if (factory instanceof AsyncGeneratorFunction.constructor) return ""
 
@@ -108,7 +108,7 @@ namespace WebJSXSerializer {
     return value
   }
 
-  export function applyCustomJSXAttributes(this: WebInflatorBased, props: any) {
+  export function applyCustomJSXAttributes(this: WebInflatorBased, props: any): void {
     if (this.inflator == null) return
     if (this.inflator.jsxAttributes.size === 0) return
 

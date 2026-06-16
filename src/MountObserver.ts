@@ -11,7 +11,7 @@ export class MountObserver {
       if (entry.isConnected === false) routine?.exit()
     })
   })
-  static with(routine: Lifecycle) {
+  static with(routine: Lifecycle): (node: Node) => () => void {
     return (node: Node) => {
       this.routines.set(node, routine)
       this.observer.observe(node)

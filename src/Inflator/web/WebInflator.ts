@@ -51,7 +51,7 @@ class WebInflator extends Inflator {
    * */
   jsxAttributes: CustomAttributesMap = new Map<string, JSXAttributeSetup<any>>()
 
-  protected clone() {
+  protected clone(): WebInflator {
     const clone = new WebInflator
     clone.flags = { ...this.flags }
     clone.jsxAttributes = new Map(this.jsxAttributes)
@@ -68,7 +68,7 @@ class WebInflator extends Inflator {
     return document.createTextNode(primitive as string)
   }
 
-  protected inflateFragment() {
+  protected inflateFragment(): Group {
     return new Group
   }
 
@@ -84,7 +84,7 @@ class WebInflator extends Inflator {
     throw new TypeError("Unsupported type of `jsx`", { cause: { jsx } })
   }
 
-  protected inflateObservable<T>(observable: Observable<T> & Partial<AccessorGet<T>>) {
+  protected inflateObservable<T>(observable: Observable<T> & Partial<AccessorGet<T>>): Node | Text {
     const value = observable.get?.()
 
     switch (typeof value) {
@@ -101,7 +101,7 @@ class WebInflator extends Inflator {
     }
   }
 
-  protected inflateObservableText<T>(observable: Observable<T> & Partial<AccessorGet<T>>) {
+  protected inflateObservableText<T>(observable: Observable<T> & Partial<AccessorGet<T>>): Text {
     const value = observable.get?.()
     const textNode = document.createTextNode(value as string)
 
@@ -110,7 +110,7 @@ class WebInflator extends Inflator {
     return textNode
   }
 
-  protected inflateObservableJSX<T extends JSX.Element>(observable: Observable<T> & Partial<AccessorGet<T>>) {
+  protected inflateObservableJSX<T extends JSX.Element>(observable: Observable<T> & Partial<AccessorGet<T>>): Comment {
     const placeholder = onDemandRef(() => new Comment("ObservableJSX/" + observable.constructor.name))
 
     const value = observable.get!()
@@ -319,7 +319,7 @@ class WebInflator extends Inflator {
     return inflated
   }
 
-  protected bindClassName(cls: unknown, node: Element, isSVG: boolean) {
+  protected bindClassName(cls: unknown, node: Element, isSVG: boolean): void {
     if (typeof cls !== "object") {
       if (isSVG) node.setAttribute("class", String(cls))
       else node.className = String(cls)
@@ -330,7 +330,7 @@ class WebInflator extends Inflator {
     }
   }
 
-  protected bindStyle(style: unknown, element: CSSStyleDeclaration) {
+  protected bindStyle(style: unknown, element: CSSStyleDeclaration): void {
     if (isRecord(style)) {
       for (const property in style) {
         if (property.startsWith("--")) {
@@ -344,13 +344,13 @@ class WebInflator extends Inflator {
     WebInflator.subscribe(style, function (value) { this.cssText = value as string }, element)
   }
 
-  protected bindNodeAria(aria: Record<string, unknown>, node: Element) {
+  protected bindNodeAria(aria: Record<string, unknown>, node: Element): void {
     for (const key in aria) {
       WebInflator.subscribeProperty(key, aria[key], node)
     }
   }
 
-  protected bindFormControls(type: string, props: Record<string, any> | null | undefined, node: Element) {
+  protected bindFormControls(type: string, props: Record<string, any> | null | undefined, node: Element): void {
     if (type === "input") {
       if (props?.type != null) WebInflator.subscribeProperty("type", props.type, node)
       if (props?.valueAsDate != null) WebNodeBinding.dualSignalBind(node, "valueAsDate", props.valueAsDate, "input")
@@ -364,7 +364,7 @@ class WebInflator extends Inflator {
   }
 
   private readonly bindContext = { props: {}, key: "", value: null as unknown, bind: (() => { }) as any }
-  protected bindCustomAttributes(props: Record<string, any>, node: Element) {
+  protected bindCustomAttributes(props: Record<string, any>, node: Element): void {
     if (this.jsxAttributes.size === 0) return
     const bind = (key: string, value: unknown) => {
       WebInflator.subscribeProperty(key, value, node)
@@ -381,13 +381,13 @@ class WebInflator extends Inflator {
     }
   }
 
-  static final = new FinalizationRegistry<Disposal>(disposal => {
+  static final: FinalizationRegistry<Disposal> = new FinalizationRegistry<Disposal>(disposal => {
     disposal.controller.current.abort()
   })
 
   private components: ProtonComponent[] = []
 
-  public inflateComponent(factory: Function, props?: any) {
+  public inflateComponent(factory: Function, props?: any): Node | InsertionGroup | null {
     if (this.flags.skipAsync) {
       if (factory instanceof AsyncFunction.constructor) return null
       if (factory instanceof AsyncGeneratorFunction.constructor) return null
@@ -438,7 +438,7 @@ class WebInflator extends Inflator {
     return componentGroup
   }
 
-  protected bindEventListeners(listeners: unknown, element: Element) {
+  protected bindEventListeners(listeners: unknown, element: Element): void {
     WebInflator.forEachEventBinding(listeners, (event, handler) => {
       if (DELEGATED_EVENTS.has(event)) {
         let ev = (element as any).$EV

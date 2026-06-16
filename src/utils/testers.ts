@@ -26,7 +26,7 @@ export function isJSX(value: unknown): value is JSX.Element {
   return value != null && !Array.isArray(value) && value.type != null
 }
 
-export function isPrimitive(value: unknown) {
+export function isPrimitive(value: unknown): boolean {
   switch (typeof value) {
     case "function": return false
     case "object": return value == null
@@ -37,9 +37,9 @@ export function isPrimitive(value: unknown) {
 
 
 
-export function isPromiseLike(value: unknown) {
+export function isPromiseLike(value: unknown): boolean {
   return value != null && typeof value.then === "function"
 }
-export function isAsyncIterable(value: unknown) {
+export function isAsyncIterable(value: unknown): boolean {
   return value != null && typeof value[Symbol.asyncIterator] === "function"
 }

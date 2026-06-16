@@ -9,7 +9,7 @@ import { ProtonComponent } from "./ProtonComponent"
  *
  * @example Dynamic(CharacterForm, { character })
  */
-export function ProtonDynamic<Props>(componentFactory: (props: Props) => unknown, props: { [K in keyof Props]: StateOrPlain<Props[K]> }) {
+export function ProtonDynamic<Props>(componentFactory: (props: Props) => unknown, props: { [K in keyof Props]: StateOrPlain<Props[K]> }): unknown {
   const results = new Map<unknown[], unknown>()
   const resultsAge = new Map<unknown[], number>()
 

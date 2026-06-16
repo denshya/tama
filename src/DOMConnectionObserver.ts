@@ -74,11 +74,11 @@ export class DOMConnectionObserver {
   // constructor(private readonly methods: DOMConnectionObserverMethods) { }
   constructor(private readonly callback: (entries: DOMConnectionObserverEntry[]) => void) { }
 
-  observe(target: Node) {
+  observe(target: Node): void {
     const subs = DOMConnectionObserver.subscriptions.getOrInsertComputed(target, DOMConnectionObserver.observe)
     subs.add(isConnected => this.callback([{ isConnected, target }]))
   }
-  unobserve(node: Node) {
+  unobserve(node: Node): void {
     DOMConnectionObserver.subscriptions.delete(node)
     DOMConnectionObserver.unobserve(node)
   }
