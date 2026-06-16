@@ -398,10 +398,6 @@ class WebInflator extends Inflator {
     }
 
     const mounted = props?.mounted
-    if (mounted != null) {
-      props = { ...props }
-      delete props.mounted
-    }
 
     const component = new ProtonComponent(this, this.component)
     const componentGroup = new InsertionGroup
