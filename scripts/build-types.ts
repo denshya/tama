@@ -30,6 +30,35 @@ function walk(dir: string): string[] {
   return files
 }
 
+function stripInternal(code: string): string {
+  const lines = code.split("\n")
+  const keep = new Array<boolean>(lines.length).fill(true)
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() !== "/** @internal */") continue
+
+    keep[i] = false
+    i++
+
+    if (i >= lines.length) break
+
+    let braceDepth = 0
+    let j = i
+    while (j < lines.length) {
+      for (const ch of lines[j]) {
+        if (ch === "{") braceDepth++
+        else if (ch === "}") braceDepth--
+      }
+      keep[j] = false
+      j++
+      if (braceDepth === 0) break
+    }
+    i = j - 1
+  }
+
+  return lines.filter((_, i) => keep[i]).join("\n")
+}
+
 function rewriteAliases(code: string, sourceDir: string, outDir: string): string {
   const resolveImport = (importPath: string): string | null => {
     const resolved = resolver.sync(sourceDir, `@/${importPath}`)
@@ -68,8 +97,13 @@ for (const file of files) {
 
   const absSource = join(process.cwd(), file)
   const absOutPath = join(process.cwd(), outPath)
-  const code = rewriteAliases(result.code, dirname(absSource), dirname(absOutPath))
-  writeFileSync(outPath, code)
+  let code = stripInternal(result.code)
+  code = rewriteAliases(code, dirname(absSource), dirname(absOutPath))
+  if (code.trim()) {
+    writeFileSync(outPath, code)
+  } else {
+    writeFileSync(outPath, "export {};\n")
+  }
 }
 
 console.log(`Generated ${files.length} declaration files`)
