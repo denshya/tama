@@ -14,7 +14,7 @@
     "dev": "vite",
     "build": "vite build && bun build:types",
     "build:watch": "vite build --watch && bun build:types --watch",
-    "build:types": "tsup src/index.ts src/jsx/JSX.shared.ts --outDir build --format esm --dts-only --tsconfig tsconfig.build.json",
+    "build:types": "tsc -p tsconfig.build.json --emitDeclarationOnly",
     "preview": "vite preview",
     "release:patch": "npm version patch && bun run build && export GITHUB_TOKEN=${GITHUB_TOKEN} && npm publish",
     "stats": "bun stats:treemap && bun stats:sunburst",
@@ -27,22 +27,21 @@
     "node-group": "^0.1.6"
   },
   "peerDependencies": {
-    "type-fest": ">=4.31.0",
+    "type-fest": ">=5.7.0",
     "@denshya/reactive": ">=0.10.0"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@typescript-eslint/eslint-plugin": "^8.46.2",
-    "@typescript-eslint/parser": "^8.46.2",
-    "eslint": "10.4.0",
-    "eslint-plugin-simple-import-sort": "^13.0.0",
-    "eslint-plugin-unused-imports": "^4.1.4",
-    "happy-dom": "^20.0.11",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.3",
-    "vite-bundle-visualizer": "^1.2.1",
-    "vite-plugin-externalize-deps": "^0.10.0"
+    "@types/bun": "1.3.14",
+    "@typescript-eslint/eslint-plugin": "8.61.1",
+    "@typescript-eslint/parser": "8.61.1",
+    "eslint": "10.5.0",
+    "eslint-plugin-simple-import-sort": "13.0.0",
+    "eslint-plugin-unused-imports": "4.4.1",
+    "tsup": "8.5.1",
+    "typescript": "6.0.3",
+    "vite": "8.0.16",
+    "vite-bundle-visualizer": "1.2.1",
+    "vite-plugin-externalize-deps": "0.10.0"
   },
   "repository": {
     "type": "git",
