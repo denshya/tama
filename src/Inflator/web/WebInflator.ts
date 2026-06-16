@@ -397,6 +397,8 @@ class WebInflator extends Inflator {
       return this.inflate(factory(props))
     }
 
+    const mounted = props?.mounted
+
     const component = new ProtonComponent(this, this.component)
     const componentGroup = new InsertionGroup
 
@@ -412,10 +414,19 @@ class WebInflator extends Inflator {
       return componentGroup
     }
 
+    let mountState = true
+    if (mounted != null && MountGuard.is(mounted)) {
+      mountState = MountGuard.truthy(mounted) === false
+    }
+
     const currentView = component.inflator.inflate(component.view.current) as ChildNode | null
     replace(currentView)
 
     function replace(view: unknown | null) {
+      if (!mountState) {
+        componentGroup.replaceChildren()
+        return
+      }
       if (view == null) componentGroup.replaceChildren()
       if (view instanceof Node) componentGroup.replaceChildren(view)
     }
@@ -434,6 +445,15 @@ class WebInflator extends Inflator {
       cancelAnimationFrame(lastAnimationFrame)
       lastAnimationFrame = requestAnimationFrame(() => replace(view))
     })
+
+    if (mounted != null && MountGuard.is(mounted)) {
+      mounted.subscribe(() => {
+        const newState = mounted.valid(mounted.get?.() ?? mounted.valueOf())
+        if (newState === mountState) return
+        mountState = newState
+        replace(component.view.current)
+      })
+    }
 
     return componentGroup
   }
