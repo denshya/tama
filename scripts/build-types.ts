@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, relative, dirname } from "node:path"
 import { isolatedDeclarationSync } from "oxc-transform"
 import { ResolverFactory } from "oxc-resolver"
@@ -28,6 +28,14 @@ function walk(dir: string): string[] {
     }
   }
   return files
+}
+
+const { writeFileSync: rawWriteFileSync } = { writeFileSync }
+
+function writeWithManualOverride(path: string, content: string) {
+  const manual = join(ABS_SRC, relative(ABS_OUT, join(process.cwd(), path)))
+  if (existsSync(manual)) return
+  writeFileSync(path, content)
 }
 
 function stripInternal(code: string): string {
@@ -100,9 +108,9 @@ for (const file of files) {
   let code = stripInternal(result.code)
   code = rewriteAliases(code, dirname(absSource), dirname(absOutPath))
   if (code.trim()) {
-    writeFileSync(outPath, code)
+    writeWithManualOverride(outPath, code)
   } else {
-    writeFileSync(outPath, "export {};\n")
+    writeWithManualOverride(outPath, "export {};\n")
   }
 }
 
