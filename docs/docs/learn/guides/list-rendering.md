@@ -5,7 +5,7 @@ sidebar_position: 6
 # List Rendering
 
 Tama accepts arrays and iterables directly as children.
-That makes list rendering easy to start with, but it is important to understand that the update model is not React's keyed reconciliation.
+List updates use **no-key, position-based reconciliation**: unchanged items keep their DOM nodes, changed items are patched in place, and there is no `key` prop contract like React's.
 
 ## Static Lists
 
@@ -32,19 +32,56 @@ function ShoppingList() {
 }
 ```
 
-## Important Difference From React/Solid
+## Reconciling Lists
 
-When an iterable child source updates, Tama reinflates the next collection and replaces the previous rendered children as a whole.
+`map` re-runs its callback for every item on every update, which is fine for small lists but wasteful for large ones.
+Attach a `StateReconciler` instead: it caches the mapped views by item identity, so surviving items keep both their view instance and their DOM nodes across updates.
 
-That means:
+```tsx
+import { StateArray, StateReconciler } from "@denshya/reactive"
 
-- there is no built-in `key` prop contract
-- list updates are not diffed item-by-item in the React sense
-- DOM identity is only preserved if you preserve it yourself
+const todos = new StateArray<TodoItem>([])
+todos.reconciler = StateReconciler.IDENTITY
+
+function TodoList() {
+  // The same `map` as always — with a reconciler installed, surviving rows
+  // keep their views and DOM across updates.
+  return <ul>{todos.map(todo => <TodoRow todo={todo} />)}</ul>
+}
+
+todos.set(todos.get().filter(todo => todo.id !== id))
+// Surviving rows keep their <li> nodes — the callback ran zero times for them.
+```
+
+For items replaced by new objects with a stable domain identity, match on a field instead:
+
+```ts
+todos.reconciler = new StateReconciler((a, b) => a.id === b.id)
+```
+
+With a reconciler installed, the `map` callback must be **pure with respect to the reconciler's equality**: items that are "the same" must produce the same view, because the callback runs at most once per surviving item.
+Mutate items through their `State` fields (fine-grained updates still flow into unchanged rows) rather than mutating plain fields and re-setting the array.
+
+## How Updates Are Reconciled
+
+When an iterable child source updates, Tama reconciles the new collection against the rendered one positionally, without keys:
+
+- **Identical items (`===`) keep everything.** Leading and trailing runs of unchanged items are skipped entirely — no DOM access, no rebinding. This is the common case for remove/insert-heavy updates.
+- **Changed items are patched in place.** A position that receives a different item of the same shape keeps its DOM element; only changed props and children are rebound (including event handlers and observable text).
+- **Shape mismatches rebuild that position only.** A different element type, class components, fragments, or form-control value changes fall back to re-creating just that item.
+- **DOM order always follows array order.** Items are patched, inserted, or removed — never moved. Two swapped items each get patched, like Vue's no-key mode.
+
+A consequence of positional patching: an item that leaves the list and later comes back gets a **new** DOM node, even if the item object is identical. Only items that survive consecutive updates keep their nodes.
+
+### Deterministic Disposal
+
+When a record leaves the list, every subscription bound to its nodes is released.
+Derived states (like a `State.to` fork inside a row component) detach from their source once their last observer leaves — so a fork bound to a row's element dies with the row.
+Removing rows does not accumulate listeners or pinned nodes; a fork that is never bound to anything outlives its row, so always bind forks you render.
 
 ## What To Do In Practice
 
-The short version: use `StateArray` when the list itself is mutable, use `State` plus a new array value when you want to replace the whole list, and move row-specific state into stable model objects when item identity must survive list changes.
+The short version: use `StateArray` when the list itself is mutable, attach a `reconciler` when it grows large or updates often, and keep row-specific state in stable model objects when item identity must survive list changes.
 
 ### Prefer `StateArray` For Mutable Collections
 
@@ -77,22 +114,19 @@ class TodoItem {
 }
 
 const todos = new StateArray<TodoItem>([])
-
-function TodoList() {
-  return <ul>{todos.map(todo => <TodoRow todo={todo} />)}</ul>
-}
+todos.reconciler = StateReconciler.IDENTITY
 ```
 
-## When Whole-List Replacement Is Fine
+## When Plain `map` Is Fine
 
-Whole-list replacement is often completely acceptable for:
+Plain `map` (whole-view re-derivation) is often completely acceptable for:
 
 - small lists
+- rarely-updating lists
 - filtered and sorted views
-- admin tools
 - dashboards where row identity is already modeled in store objects
 
-It becomes more important to think about identity when you need preserved DOM state across frequent list changes like List Virtualization, but most of the time, the simplicity of whole-list replacement is a good tradeoff.
+Reach for `reconciler` when lists are large or mutate often — removals and insertions stop paying for the rows that did not change.
 
 > *Premature optimization is the root of all evil. Start with the simplest thing that works, and only optimize if you have a real problem.*
 

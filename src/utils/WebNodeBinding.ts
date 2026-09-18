@@ -22,7 +22,7 @@ function getNativeDescriptor(instance: Node, property: keyof never): PropertyDes
 
 /** @internal */
 namespace WebNodeBinding {
-  export function dualSignalBind<T extends Node>(node: T, key: string, value: unknown, changeEventKey: string): void {
+  export function dualSignalBind<T extends Node>(node: T, key: string, value: unknown, changeEventKey: string, track?: (subscription: { unsubscribe(): void }) => void): void {
     const accessor = value
     if (!isObservableGetter(accessor)) return
 
@@ -41,7 +41,8 @@ namespace WebNodeBinding {
 
       node.addEventListener(changeEventKey, event => accessor.set!((event.currentTarget as T)[key]))
     }
-    accessor.subscribe?.(value => descriptor.set!.call(node, accessor.get?.() ?? value))
+    const subscription = accessor.subscribe?.(value => descriptor.set!.call(node, accessor.get?.() ?? value))
+    if (subscription != null) track?.(subscription)
   }
 }
 

@@ -72,10 +72,20 @@ const total = State.combine([subtotal, tax], (subtotal, tax) => subtotal + tax)
 
 ## Lists Are The Main Performance Boundary
 
-Tama accepts iterables directly, but iterable updates are replaced as a whole.
-There is no built-in keyed reconciliation contract.
+Tama reconciles iterable updates positionally, without keys: identical items (`===`) keep their DOM nodes untouched, changed items are patched in place, and only shape mismatches rebuild a position.
 
-That means list performance depends heavily on how you model identity.
+That means list performance depends heavily on how you model identity — unchanged item objects are what make updates near-free.
+
+### Attach A `StateReconciler` For Large Or Churning Lists
+
+```tsx
+const products = new StateArray<Product>([])
+products.reconciler = StateReconciler.IDENTITY
+
+const rows = products.map(product => <ProductRow product={product} />)
+```
+
+The reconciler makes `map` reuse derived values of items that are "the same" across updates, so plain `map` without one (which re-runs its callback for every item on every update) is only worth it for small lists.
 
 ### Prefer `StateArray` For Mutable Collections
 
@@ -115,7 +125,7 @@ function Panel(this: Tama.Component) {
 ```
 
 But the same mechanism can surprise you if you reuse one JSX object in multiple places at the same time.
-The cached node is the same DOM node, so attaching it elsewhere moves it.
+The cached node is the same DOM node, so attaching it elsewhere moves it away.
 
 ### Good Use
 

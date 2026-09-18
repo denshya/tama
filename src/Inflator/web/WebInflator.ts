@@ -1,10 +1,10 @@
-import { State } from "@denshya/reactive"
+import { Scope, State } from "@denshya/reactive"
 import { Group } from "node-group"
 import { Primitive } from "type-fest"
 
 import { AccessorGet } from "@/Accessor"
 import { AsyncFunction, AsyncGeneratorFunction } from "@/BuiltinObjects"
-import { Disposal } from "@/Disposal"
+import { Disposal, DISPOSAL, withinScope } from "@/Disposal"
 import { InsertionGroup } from "@/InsertionGroup"
 import { CustomAttributesMap, JSXAttributeSetup } from "@/jsx/JSXCustomizationAPI"
 import { MountGuard } from "@/MountGuard"
@@ -12,6 +12,8 @@ import Observable from "@/Observable"
 import { ProtonComponent } from "@/Proton/ProtonComponent"
 import { ProtonRef } from "@/Proton/ProtonRef"
 import { ChildrenType } from "@/jsx/ProtonJSX"
+import { ListInflation, ListReconciler, ListRecord } from "@/Reconciler/ListReconciler"
+import { subscriptions } from "@/Subscriptions"
 import { isIterable, isJSX, isRecord } from "@/utils/testers"
 import WebNodeBinding from "@/utils/WebNodeBinding"
 
@@ -19,7 +21,6 @@ import { NAMESPACE_MATH, NAMESPACE_SVG } from "./consts"
 import { iterableOf, onDemandRef, truthyNonNull } from "./helpers"
 
 import Inflator from "../Inflator"
-import Null from "@/Null"
 
 
 type WebInflateResult<T> =
@@ -37,7 +38,7 @@ interface WebInflatorFlags {
   disableJSXCache: boolean
 }
 
-class WebInflator extends Inflator {
+class WebInflator extends Inflator implements ListInflation {
   private static jsxCache = new WeakMap<object, Node>
 
   flags: WebInflatorFlags = {
@@ -105,7 +106,7 @@ class WebInflator extends Inflator {
     const value = observable.get?.()
     const textNode = document.createTextNode(value as string)
 
-    observable.subscribe(value => textNode.nodeValue = (observable.get?.() ?? value) as string)
+    WebInflator.subscribe(observable, function (value) { this.nodeValue = (observable.get?.() ?? value) as string }, textNode, "nodeValue")
 
     return textNode
   }
@@ -126,12 +127,11 @@ class WebInflator extends Inflator {
   }
 
   protected inflateIterable<T, P extends ParentNode = InsertionGroup>(iterable: (IteratorObject<T> & Partial<Observable<IteratorObject<T>>>), parent: P = new InsertionGroup as never): P {
-    const replace = (otherIterable: IteratorObject<T> & Partial<Observable<IteratorObject<T>>>) => {
-      parent.replaceChildren(...this.__inflateIterable__(otherIterable))
-    }
+    const reconciler = new ListReconciler(parent, this)
+    const update = (source: IteratorObject<T>) => reconciler.reconcile(toItems(source))
 
-    replace(iterableOf(iterable))
-    iterable.subscribe?.(replace)
+    update(iterableOf(iterable))
+    iterable.subscribe?.(update)
 
     return parent
   }
@@ -140,34 +140,11 @@ class WebInflator extends Inflator {
     iterable: IteratorObject<T> & Partial<Observable<IteratorObject<T>>>,
     parent: ParentNode,
   ): void {
-    let anchor = parent.lastChild
-    let currentNodes: Node[] = []
+    const reconciler = new ListReconciler(parent, this, { placeholder: true })
+    const update = (source: IteratorObject<T>) => reconciler.reconcile(toItems(source))
 
-    const replace = (otherIterable: IteratorObject<T>) => {
-      for (const node of currentNodes) (node as ChildNode).remove()
-      currentNodes.length = 0
-
-      const nodes = this.__inflateIterable__(otherIterable)
-      if (nodes.length === 0 && !anchor) {
-        anchor = document.createComment("reactive-iterable")
-        parent.appendChild(anchor)
-        return
-      }
-      if (nodes.length === 0) return
-
-      currentNodes.push(...nodes)
-
-      if (anchor && anchor.isConnected) {
-        anchor.after(...nodes)
-      } else {
-        parent.prepend(...nodes)
-      }
-
-      anchor = nodes[nodes.length - 1]
-    }
-
-    replace(iterableOf(iterable))
-    iterable.subscribe?.(replace)
+    update(iterableOf(iterable))
+    iterable.subscribe?.(update)
   }
   protected inflateAsyncIterable<T>(asyncIterable: AsyncIteratorObject<T>): unknown {
     throw new TypeError("Async Iterator is not supported", { cause: { asyncIterable } })
@@ -252,6 +229,18 @@ class WebInflator extends Inflator {
     const isSVG = NAMESPACE_SVG.has(type)
     const inflated = this.inflateElement(type, props.ns != null ? { namespace: props.ns as string } : undefined)
 
+    const bound = this.bindIntrinsicProps(type, props, inflated, isSVG)
+
+    if (bound.immediate) {
+      bound.mountGuard!.placeholder.current.inflated = inflated
+      return bound.mountGuard!.placeholder.current
+    }
+
+    return inflated
+  }
+
+  /** Binds every prop of an intrinsic element — shared by inflation and whole-node rebinding. */
+  private bindIntrinsicProps(type: string, props: Record<string, any>, inflated: Element, isSVG: boolean): { immediate: boolean, mountGuard?: MountGuard } {
     let mountGuard: MountGuard | undefined
     let immediate = false
 
@@ -311,12 +300,7 @@ class WebInflator extends Inflator {
     this.bindFormControls(type, props, inflated)
     this.bindCustomAttributes(props, inflated)
 
-    if (immediate) {
-      (mountGuard!).placeholder.current.inflated = inflated
-      return mountGuard!.placeholder.current
-    }
-
-    return inflated
+    return { immediate, mountGuard }
   }
 
   protected bindClassName(cls: unknown, node: Element, isSVG: boolean): void {
@@ -334,14 +318,14 @@ class WebInflator extends Inflator {
     if (isRecord(style)) {
       for (const property in style) {
         if (property.startsWith("--")) {
-          WebInflator.subscribe(style[property], function (value) { this.setProperty(property, value as string) }, element)
+          WebInflator.subscribe(style[property], function (value) { this.setProperty(property, value as string) }, element, "style:" + property)
           continue
         }
         WebInflator.subscribeProperty(property, style[property], element)
       }
       return
     }
-    WebInflator.subscribe(style, function (value) { this.cssText = value as string }, element)
+    WebInflator.subscribe(style, function (value) { this.cssText = value as string }, element, "style")
   }
 
   protected bindNodeAria(aria: Record<string, unknown>, node: Element): void {
@@ -351,15 +335,17 @@ class WebInflator extends Inflator {
   }
 
   protected bindFormControls(type: string, props: Record<string, any> | null | undefined, node: Element): void {
+    const track = (key: string) => (subscription: { unsubscribe(): void }) => WebInflator.trackSubscription(node, "bind:" + key, subscription)
+
     if (type === "input") {
       if (props?.type != null) WebInflator.subscribeProperty("type", props.type, node)
-      if (props?.valueAsDate != null) WebNodeBinding.dualSignalBind(node, "valueAsDate", props.valueAsDate, "input")
-      if (props?.valueAsNumber != null) WebNodeBinding.dualSignalBind(node, "valueAsNumber", props.valueAsNumber, "input")
-      if (props?.value != null) WebNodeBinding.dualSignalBind(node, "value", props.value, "input")
+      if (props?.valueAsDate != null) WebNodeBinding.dualSignalBind(node, "valueAsDate", props.valueAsDate, "input", track("valueAsDate"))
+      if (props?.valueAsNumber != null) WebNodeBinding.dualSignalBind(node, "valueAsNumber", props.valueAsNumber, "input", track("valueAsNumber"))
+      if (props?.value != null) WebNodeBinding.dualSignalBind(node, "value", props.value, "input", track("value"))
     } else if (type === "textarea") {
-      if (props?.value != null) WebNodeBinding.dualSignalBind(node, "value", props.value, "input")
+      if (props?.value != null) WebNodeBinding.dualSignalBind(node, "value", props.value, "input", track("value"))
     } else if (type === "select") {
-      if (props?.value != null) WebNodeBinding.dualSignalBind(node, "value", props.value, "change")
+      if (props?.value != null) WebNodeBinding.dualSignalBind(node, "value", props.value, "change", track("value"))
     }
   }
 
@@ -394,7 +380,13 @@ class WebInflator extends Inflator {
     }
     // If arrow function, simplify inflation.
     if (factory.prototype == null && factory instanceof AsyncFunction.constructor === false) {
-      return this.inflate(factory(props))
+      // Scope derivations created by the factory and its inflation (e.g. `State.to` forks)
+      // to a disposal chained to the node, so a reconciler removing the node can release them.
+      const disposal = new Disposal
+      withinScope(disposal)
+      const view = Scope.within(() => disposal.signal, () => this.inflate(factory(props)))
+      if (view instanceof Node) (view as any)[DISPOSAL] ??= disposal
+      return view
     }
 
     const mounted = props?.mounted
@@ -407,7 +399,7 @@ class WebInflator extends Inflator {
     WebInflator.final.register(componentGroup, component.disposal)
 
     try {
-      component.view.initWith(factory.call(component, props))
+      component.view.initWith(Scope.within(component.disposal.signal, () => factory.call(component, props)))
     } catch (thrown) {
       component.tree.caught(thrown)
       console.error(thrown)
@@ -419,7 +411,7 @@ class WebInflator extends Inflator {
       mountState = MountGuard.truthy(mounted) === false
     }
 
-    const currentView = component.inflator.inflate(component.view.current) as ChildNode | null
+    const currentView = Scope.within(component.disposal.signal, () => component.inflator.inflate(component.view.current)) as ChildNode | null
     replace(currentView)
 
     function replace(view: unknown | null) {
@@ -434,7 +426,7 @@ class WebInflator extends Inflator {
 
     let lastAnimationFrame = -1
     component.view.subscribe(view => {
-      view = component.inflator.inflate(view)
+      view = Scope.within(component.disposal.signal, () => component.inflator.inflate(view))
 
       if (component.view.default == null && component.view.current == null) {
         // Skip scheduling if it's the first view to avoid unnecessary layout-paint.
@@ -464,7 +456,7 @@ class WebInflator extends Inflator {
         let ev = (element as any).$EV
         if (ev == null) {
           ev = {}
-            ; (element as any).$EV = ev
+          ; (element as any).$EV = ev
         }
         let handlers = ev[event]
         if (handlers == null) {
@@ -474,7 +466,20 @@ class WebInflator extends Inflator {
         handlers.push(handler)
       } else {
         element.addEventListener(event, handler)
+        WebInflator.trackSubscription(element, "on:" + event, { unsubscribe: () => element.removeEventListener(event, handler) })
       }
+    })
+  }
+
+  /** Removes every event handler bound from `listeners` on `element` — delegated and native. */
+  static unbindEventListeners(listeners: unknown, element: Element): void {
+    WebInflator.forEachEventBinding(listeners, event => {
+      const ev = (element as any).$EV
+      if (ev?.[event] != null) {
+        ev[event].length = 0
+        delete ev[event]
+      }
+      WebInflator.unbind(element, "on:" + event)
     })
   }
 
@@ -527,22 +532,25 @@ class WebInflator extends Inflator {
     return false
   }
 
-  private static subscriptions = new Map<object, { unsubscribe(): void }[]>
+  private static trackSubscription(target: object, key: PropertyKey, sub: { unsubscribe(): void }) {
+    subscriptions.track(target, key, sub)
+  }
 
-  private static trackSubscription(target: object, sub: { unsubscribe(): void }) {
-    let subs = WebInflator.subscriptions.get(target)
-    if (subs == null) {
-      subs = []
-      WebInflator.subscriptions.set(target, subs)
-    }
-    subs.push(sub)
+  /** Releases every subscription bound to `key` on `target` — the next bind of that key starts clean. */
+  static unbind(target: object, key: PropertyKey): void {
+    subscriptions.release(target, key)
+  }
+
+  /** Releases every subscription bound to `target` and forgets it. Call when the node leaves the document for good. */
+  static dispose(target: object): void {
+    subscriptions.dispose(target)
   }
 
   /**
    * Binds a property.
    */
   static subscribeProperty(key: keyof never, source: unknown, target: unknown): void {
-    WebInflator.subscribe(source, function (value) { (this as any)[key] = value }, target)
+    WebInflator.subscribe(source, function (value) { (this as any)[key] = value }, target, key)
   }
 
   /**
@@ -555,41 +563,344 @@ class WebInflator extends Inflator {
       } else {
         this.removeAttribute(key)
       }
-    }, target)
+    }, target, key)
   }
 
   /** @internal */
-  protected static subscribe<S>(source: unknown, targetBindCallback: (this: S, value: unknown) => void, thisArg?: S): { unsubscribe(): void } | void {
+  protected static subscribe<S>(source: unknown, targetBindCallback: (this: S, value: unknown) => void, thisArg?: S, key?: PropertyKey): { unsubscribe(): void } | void {
     if (source == null) return
     if (typeof source !== "object" && typeof source !== "function") {
       targetBindCallback.call(thisArg, source)
       return
     }
     const unsub = State.subscribeImmediate(source, thisArg != null ? targetBindCallback.bind(thisArg) : targetBindCallback)
-    if (unsub != null && thisArg != null) {
-      WebInflator.trackSubscription(thisArg, unsub)
+    if (unsub != null && thisArg != null && key != null) {
+      WebInflator.trackSubscription(thisArg, key, unsub)
     }
     return unsub
   }
 
-  private __inflateIterable__(iterable: Iterable<unknown> & { length?: number }) {
-    if (iterable.length === 0) return Null.ARRAY
+  // ---- List reconciliation (implements `ListInflation` for `ListReconciler`) ----
 
-    const result = new Array
+  /** @internal */
+  public inflateListItem(item: unknown): { node: Node, descriptor: unknown } | null {
+    // Arrow components are evaluated here, once — their result is what gets inflated and patched.
+    const descriptor = unwrapArrowComponents(item)
 
-    for (const next of iterable) {
-      if (next == null) continue
+    const node = this.inflateUncached(descriptor)
+    if (node == null) return null
 
-      const c = this.inflate(next)
-      if (c.nodeType === Node.DOCUMENT_FRAGMENT_NODE && c.childNodes.length === 0) {
+    return { node, descriptor }
+  }
+
+  /** @internal */
+  public patchListItem(record: ListRecord, item: unknown): boolean {
+    const node = record.node
+    if (node == null) return false
+
+    const old = record.descriptor
+    const descriptor = unwrapArrowComponents(item)
+
+    if (this.patchNestedNode(node, old, descriptor)) {
+      record.descriptor = descriptor
+      return true
+    }
+    return false
+  }
+
+  /** Inflates with the JSX cache disabled — list items must never share cached nodes across positions. */
+  private inflateUncached(item: unknown): Node | null {
+    const cacheWasDisabled = this.flags.disableJSXCache
+    this.flags.disableJSXCache = true
+    try {
+      return this.inflate(item) as Node | null
+    } finally {
+      this.flags.disableJSXCache = cacheWasDisabled
+    }
+  }
+
+  /**
+   * Patches `node` — rendered from `oldItem` — in place against an already
+   * unwrapped `newDescriptor`. Returns false when the position must be rebuilt.
+   */
+  private patchNestedNode(node: Node, oldItem: unknown, newDescriptor: unknown): boolean {
+    if (oldItem === newDescriptor) return true
+    if (newDescriptor == null || oldItem == null) return false
+
+    if (isJSX(newDescriptor)) {
+      if (typeof newDescriptor.type !== "string") return false
+
+      if (isJSX(oldItem)) {
+        // Known old intrinsic — patch only the same tag, otherwise rebuild the node.
+        if (typeof (oldItem as JSX.Element).type !== "string" || (oldItem as JSX.Element).type !== newDescriptor.type) return false
+        return this.patchIntrinsic(node as Element, oldItem as JSX.Element, newDescriptor)
+      }
+      // The previous descriptor is unknown (was a component) — rebind the whole node
+      // when its tag matches, otherwise rebuild.
+      if (node instanceof Element) return this.rebindIntrinsic(node, newDescriptor)
+      return false
+    }
+
+    if (node instanceof Text === false || isJSX(oldItem)) return false
+    return this.patchTextNode(node, oldItem, newDescriptor)
+  }
+
+  /** Patches a text node from a primitive or observable source. */
+  private patchTextNode(node: Text, oldItem: unknown, newItem: unknown): boolean {
+    if (typeof newItem !== "object" && typeof newItem !== "function") {
+      if (typeof oldItem === "object" || typeof oldItem === "function") WebInflator.unbind(node, "nodeValue")
+      node.nodeValue = newItem as string
+      return true
+    }
+
+    if (newItem !== oldItem) {
+      WebInflator.unbind(node, "nodeValue")
+      WebInflator.subscribe(newItem, function (value) { this.nodeValue = String(value ?? "") }, node, "nodeValue")
+    }
+    return true
+  }
+
+  /**
+   * Patches an existing element against a same-type intrinsic descriptor:
+   * only changed props are rebound, children are reconciled recursively.
+   */
+  private patchIntrinsic(element: Element, oldJsx: JSX.Element, newJsx: JSX.Element): boolean {
+    const type = newJsx.type as string
+    const oldProps = (oldJsx.props ?? {}) as Record<string, any>
+    const newProps = (newJsx.props ?? {}) as Record<string, any>
+
+    // Mount guards and form controls carry state that cannot be patched in place.
+    if ("mounted" in newProps || "mounted" in oldProps) return false
+    if (type === "input" || type === "textarea" || type === "select") {
+      if (oldProps.value !== newProps.value || oldProps.type !== newProps.type
+        || oldProps.valueAsDate !== newProps.valueAsDate || oldProps.valueAsNumber !== newProps.valueAsNumber) return false
+    }
+
+    const isSVG = NAMESPACE_SVG.has(type)
+
+    for (const key in newProps) {
+      if (key === "children" || key === "ns") continue
+      const value = newProps[key]
+      const oldValue = oldProps[key]
+
+      if (MountGuard.is(value) || MountGuard.is(oldValue)) return false
+
+      if (key === "ref") {
+        if (value != null && value !== oldValue) ProtonRef.resolve(value, element)
+        continue
+      }
+      if (key === "className" || key === "class") {
+        if (value !== oldValue) {
+          WebInflator.unbind(element, isSVG ? "class" : "className")
+          if (value != null) this.bindClassName(value, element, isSVG)
+        }
+        continue
+      }
+      if (key === "style") {
+        if (value !== oldValue) {
+          this.unbindStyle(element, oldValue)
+          if (value != null) this.bindStyle(value, element.style)
+        }
+        continue
+      }
+      if (key === "on") {
+        if (value !== oldValue) {
+          WebInflator.unbindEventListeners(oldValue, element)
+          this.bindEventListeners(value, element)
+        }
+        continue
+      }
+      if (key === "aria") {
+        if (value !== oldValue) {
+          if (isRecord(oldValue)) for (const ariaKey in oldValue) WebInflator.unbind(element, ariaKey)
+          if (isRecord(value)) this.bindNodeAria(value, element)
+        }
         continue
       }
 
-      result.push(c)
+      if (value === oldValue) continue
+
+      // Unknown props — bind as attribute or property, mirroring `bindIntrinsicProps`.
+      WebInflator.unbind(element, key)
+      if (typeof value !== "object" && typeof value !== "function" && value != null) {
+        if (isSVG || key.includes("-")) element.setAttribute(key, value as string)
+        else (element as any)[key] = value
+      } else if (value != null) {
+        if (isSVG || key.includes("-")) WebInflator.subscribeAttribute(element, key, value)
+        else WebInflator.subscribeProperty(key, value, element)
+      }
     }
 
-    return result
+    // Props that were present before but are gone now — release their bindings.
+    for (const key in oldProps) {
+      if (key in newProps || key === "children" || key === "ns") continue
+      const oldValue = oldProps[key]
+
+      if (key === "ref") continue
+      if (key === "className" || key === "class") {
+        WebInflator.unbind(element, isSVG ? "class" : "className")
+        element.removeAttribute("class")
+        continue
+      }
+      if (key === "style") {
+        this.unbindStyle(element, oldValue)
+        element.removeAttribute("style")
+        continue
+      }
+      if (key === "on") {
+        WebInflator.unbindEventListeners(oldValue, element)
+        continue
+      }
+      if (key === "aria") {
+        if (isRecord(oldValue)) for (const ariaKey in oldValue) WebInflator.unbind(element, ariaKey)
+        continue
+      }
+
+      WebInflator.unbind(element, key)
+      if (isSVG || key.includes("-")) element.removeAttribute(key)
+    }
+
+    return this.patchChildren(element, oldJsx, newJsx)
   }
+
+  /** Releases the style bindings a previous `style` prop value created. */
+  private unbindStyle(element: Element, oldValue: unknown): void {
+    if (isRecord(oldValue)) {
+      for (const property in oldValue) {
+        WebInflator.unbind(element, property.startsWith("--") ? "style:" + property : property)
+      }
+      return
+    }
+    WebInflator.unbind(element, "style")
+  }
+
+  /** Reconciles the children of an element being patched in place. */
+  private patchChildren(element: Element, oldJsx: JSX.Element, newJsx: JSX.Element): boolean {
+    const oldType = oldJsx.childrenType ?? ChildrenType.None
+    const newType = newJsx.childrenType ?? ChildrenType.None
+
+    if (oldType !== newType) {
+      const bothText = (oldType === ChildrenType.Primitive || oldType === ChildrenType.ObservableText)
+        && (newType === ChildrenType.Primitive || newType === ChildrenType.ObservableText)
+      if (bothText === false) return false
+    }
+
+    switch (newType) {
+      case ChildrenType.None:
+        return oldType === ChildrenType.None
+
+      case ChildrenType.Primitive:
+      case ChildrenType.ObservableText: {
+        const text = newJsx.props?.children
+        if (text === oldJsx.props?.children) return true
+
+        WebInflator.unbind(element, "textContent")
+        if (typeof text !== "object" && typeof text !== "function") {
+          element.textContent = text as string
+        } else {
+          WebInflator.subscribeProperty("textContent", text, element)
+        }
+        return true
+      }
+
+      case ChildrenType.ArrayStatic:
+      case ChildrenType.ArrayReactive:
+        return this.patchChildrenArray(element, oldJsx, newJsx)
+
+      case ChildrenType.ObservableIterable:
+        // An inner subscribable list keeps its own reconciler; only a changed source needs a rebuild.
+        return newJsx.props!.children === oldJsx.props!.children
+
+      case ChildrenType.VNode: {
+        const newChild = newJsx.props?.children
+        const oldChild = oldJsx.props?.children
+        if (newChild === oldChild) return true
+
+        const childNode = element.firstChild
+        if (childNode == null) return false
+
+        return this.patchNestedNode(childNode, oldChild, unwrapArrowComponents(newChild))
+      }
+    }
+  }
+
+  /** Reconciles array children positionally — the record algorithm, one level down. */
+  private patchChildrenArray(element: Element, oldJsx: JSX.Element, newJsx: JSX.Element): boolean {
+    const newChildren = newJsx.props!.children as unknown[]
+    const oldChildren = oldJsx.props!.children as unknown[]
+
+    if (newChildren === oldChildren) return true
+
+    // Nullish children inflate to nothing, breaking child-node alignment — rebuild instead.
+    for (const child of oldChildren) if (child == null) return false
+    for (const child of newChildren) if (child == null) return false
+
+    const common = Math.min(oldChildren.length, newChildren.length)
+
+    let child = element.firstChild
+    for (let index = 0; index < common; index++) {
+      if (child == null) return false
+
+      const next = child.nextSibling
+      const descriptor = unwrapArrowComponents(newChildren[index])
+      if (this.patchNestedNode(child, oldChildren[index], descriptor) === false) return false
+      child = next
+    }
+
+    // Shed the extra old children.
+    for (let index = common; index < oldChildren.length && child != null; index++) {
+      const next = child.nextSibling
+      ListReconciler.destroyNode(child)
+      child = next
+    }
+
+    // Append the extra new children.
+    if (newChildren.length > common) {
+      for (let index = common; index < newChildren.length; index++) {
+        const node = this.inflateUncached(unwrapArrowComponents(newChildren[index]))
+        if (node != null) element.appendChild(node)
+      }
+    }
+
+    return true
+  }
+
+  /** Rebinds a whole existing element to `newJsx` when the previous descriptor is unknown. */
+  private rebindIntrinsic(element: Element, newJsx: JSX.Element): boolean {
+    const props = (newJsx.props ?? {}) as Record<string, any>
+    if ("mounted" in props) return false
+
+    // The node's tag must match the descriptor — a mismatch needs a fresh element.
+    if (element.tagName.toLowerCase() !== String(newJsx.type).toLowerCase()) return false
+
+    const ev = (element as any).$EV
+    if (ev != null) {
+      for (const event in ev) {
+        ev[event].length = 0
+        delete ev[event]
+      }
+    }
+    WebInflator.dispose(element)
+
+    this.bindIntrinsicProps(newJsx.type as string, props, element, NAMESPACE_SVG.has(newJsx.type as string))
+
+    element.replaceChildren()
+    this.inflateJSXChildren(newJsx, element)
+    return true
+  }
+}
+
+function toItems<T>(source: IteratorObject<T>): readonly unknown[] {
+  return Array.isArray(source) ? source : Array.from(source as Iterable<unknown>)
+}
+
+/** Evaluates a chain of arrow-function components down to the descriptor they render. */
+function unwrapArrowComponents(value: unknown): unknown {
+  let descriptor = value
+  while (isJSX(descriptor) && typeof descriptor.type === "function" && (descriptor.type as Function).prototype == null) {
+    descriptor = (descriptor.type as Function)((descriptor as JSX.Element).props)
+  }
+  return descriptor
 }
 
 const DELEGATED_EVENTS = new Set([
