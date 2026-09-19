@@ -12,7 +12,7 @@ import Observable from "@/Observable"
 import { ProtonComponent } from "@/Proton/ProtonComponent"
 import { ProtonRef } from "@/Proton/ProtonRef"
 import { ChildrenType } from "@/jsx/ProtonJSX"
-import { ListInflation, ListReconciler, ListRecord } from "@/Reconciler/ListReconciler"
+import { ListArchetypes, ListInflation, ListReconciler, ListRecord } from "@/Reconciler/ListReconciler"
 import { subscriptions } from "@/Subscriptions"
 import { isIterable, isJSX, isRecord } from "@/utils/testers"
 import WebNodeBinding from "@/utils/WebNodeBinding"
@@ -541,27 +541,27 @@ class WebInflator extends Inflator implements ListInflation {
   }
 
   /**
-   * Binds a property.
+   * Binds a property. With `replace`, an existing binding under the same key is released in one step — the patch-path rebind.
    */
-  static subscribeProperty(key: keyof never, source: unknown, target: unknown): void {
-    WebInflator.subscribe(source, function (value) { (this as any)[key] = value }, target, key)
+  static subscribeProperty(key: keyof never, source: unknown, target: unknown, replace = false): void {
+    WebInflator.subscribe(source, function (value) { (this as any)[key] = value }, target, key, replace)
   }
 
   /**
-   * Binds an attribute.
+   * Binds an attribute. With `replace`, an existing binding under the same key is released in one step — the patch-path rebind.
    */
-  static subscribeAttribute(target: Element, key: string, value: unknown): void {
+  static subscribeAttribute(target: Element, key: string, value: unknown, replace = false): void {
     WebInflator.subscribe(value, function (value) {
       if (value != null) {
         this.setAttribute(key, value as string)
       } else {
         this.removeAttribute(key)
       }
-    }, target, key)
+    }, target, key, replace)
   }
 
   /** @internal */
-  protected static subscribe<S>(source: unknown, targetBindCallback: (this: S, value: unknown) => void, thisArg?: S, key?: PropertyKey): { unsubscribe(): void } | void {
+  protected static subscribe<S>(source: unknown, targetBindCallback: (this: S, value: unknown) => void, thisArg?: S, key?: PropertyKey, replace = false): { unsubscribe(): void } | void {
     if (source == null) return
     if (typeof source !== "object" && typeof source !== "function") {
       targetBindCallback.call(thisArg, source)
@@ -569,7 +569,8 @@ class WebInflator extends Inflator implements ListInflation {
     }
     const unsub = State.subscribeImmediate(source, thisArg != null ? targetBindCallback.bind(thisArg) : targetBindCallback)
     if (unsub != null && thisArg != null && key != null) {
-      WebInflator.trackSubscription(thisArg, key, unsub)
+      if (replace) subscriptions.replace(thisArg, key, unsub)
+      else WebInflator.trackSubscription(thisArg, key, unsub)
     }
     return unsub
   }
@@ -577,12 +578,31 @@ class WebInflator extends Inflator implements ListInflation {
   // ---- List reconciliation (implements `ListInflation` for `ListReconciler`) ----
 
   /** @internal */
-  public inflateListItem(item: unknown): { node: Node, descriptor: unknown } | null {
+  public inflateListItem(item: unknown, archetypes: ListArchetypes): { node: Node, descriptor: unknown } | null {
     // Arrow components are evaluated here, once — their result is what gets inflated and patched.
     const descriptor = unwrapArrowComponents(item)
+    const signature = signatureOfDescriptor(descriptor)
+
+    // Same-shape items after the first: clone the inert archetype snapshot and
+    // rebind the differences — no element creation, no static-prop walks.
+    if (signature != null) {
+      const archetype = archetypes.get(signature)
+      if (archetype != null) {
+        const clone = archetype.node.cloneNode(true)
+        if (this.patchNestedNode(clone, archetype.descriptor, descriptor)) {
+          return { node: clone, descriptor }
+        }
+      }
+    }
 
     const node = this.inflateUncached(descriptor)
     if (node == null) return null
+
+    // The archetype is an inert detached snapshot of the first item of its shape:
+    // cloned for structure, never bound, never displayed.
+    if (signature != null && archetypes.has(signature) === false) {
+      archetypes.set(signature, { descriptor, node: node.cloneNode(true) })
+    }
 
     return { node, descriptor }
   }
@@ -648,8 +668,7 @@ class WebInflator extends Inflator implements ListInflation {
     }
 
     if (newItem !== oldItem) {
-      WebInflator.unbind(node, "nodeValue")
-      WebInflator.subscribe(newItem, function (value) { this.nodeValue = String(value ?? "") }, node, "nodeValue")
+      WebInflator.subscribe(newItem, function (value) { this.nodeValue = String(value ?? "") }, node, "nodeValue", true)
     }
     return true
   }
@@ -715,13 +734,16 @@ class WebInflator extends Inflator implements ListInflation {
       if (value === oldValue) continue
 
       // Unknown props — bind as attribute or property, mirroring `bindIntrinsicProps`.
-      WebInflator.unbind(element, key)
+      // Observable binds replace the prior entry under the same key in one step.
       if (typeof value !== "object" && typeof value !== "function" && value != null) {
+        WebInflator.unbind(element, key)
         if (isSVG || key.includes("-")) element.setAttribute(key, value as string)
         else (element as any)[key] = value
       } else if (value != null) {
-        if (isSVG || key.includes("-")) WebInflator.subscribeAttribute(element, key, value)
-        else WebInflator.subscribeProperty(key, value, element)
+        if (isSVG || key.includes("-")) WebInflator.subscribeAttribute(element, key, value, true)
+        else WebInflator.subscribeProperty(key, value, element, true)
+      } else {
+        WebInflator.unbind(element, key)
       }
     }
 
@@ -788,11 +810,11 @@ class WebInflator extends Inflator implements ListInflation {
         const text = newJsx.props?.children
         if (text === oldJsx.props?.children) return true
 
-        WebInflator.unbind(element, "textContent")
         if (typeof text !== "object" && typeof text !== "function") {
+          WebInflator.unbind(element, "textContent")
           element.textContent = text as string
         } else {
-          WebInflator.subscribeProperty("textContent", text, element)
+          WebInflator.subscribeProperty("textContent", text, element, true)
         }
         return true
       }
@@ -882,6 +904,46 @@ class WebInflator extends Inflator implements ListInflation {
     this.inflateJSXChildren(newJsx, element)
     return true
   }
+}
+
+/**
+ * Structural signature of a list-item descriptor — the tag, children shape and
+ * child signatures, ignoring prop values. Two descriptors with the same signature
+ * are clone-compatible: an archetype of one can be cloned and rebound for the
+ * other. Non-intrinsic roots, fragments, and live inner lists (subscribable
+ * children sources) have no signature — they are never cloned.
+ */
+function signatureOfDescriptor(descriptor: unknown): string | null {
+  if (isJSX(descriptor) === false) return typeof descriptor === "object" || typeof descriptor === "function" ? null : "text"
+  const jsx = descriptor as JSX.Element
+
+  if (typeof jsx.type !== "string") return null
+
+  switch (jsx.childrenType ?? ChildrenType.None) {
+    case ChildrenType.None:
+    case ChildrenType.Primitive:
+    case ChildrenType.ObservableText:
+      return `${jsx.type}|${jsx.childrenType}`
+    case ChildrenType.VNode: {
+      const child = signatureOfDescriptor(jsx.props?.children)
+      return child == null ? null : `${jsx.type}|v>${child}`
+    }
+    case ChildrenType.ArrayStatic:
+    case ChildrenType.ArrayReactive: {
+      const children = jsx.props?.children as unknown[]
+      if (Array.isArray(children) === false) return null
+      let signature = `${jsx.type}|[`
+      for (const child of children) {
+        const childSignature = signatureOfDescriptor(child)
+        if (childSignature == null) return null
+        signature += childSignature + ","
+      }
+      return signature + "]"
+    }
+    case ChildrenType.ObservableIterable:
+      return null
+  }
+  return null
 }
 
 function toItems<T>(source: IteratorObject<T>): readonly unknown[] {

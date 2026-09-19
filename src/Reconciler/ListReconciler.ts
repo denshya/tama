@@ -2,6 +2,9 @@ import { Group } from "node-group"
 
 import { subscriptions } from "@/Subscriptions"
 
+/** Destroyed runs of at least this many records go through one native range removal. */
+const BULK_REMOVE_MIN = 32
+
 /**
  * Rendered state of one list position.
  * `item` is the last source value rendered at this position — its identity is
@@ -14,13 +17,25 @@ export interface ListRecord {
 	node: Node | null
 }
 
+/** Inert template of one item shape — a detached snapshot plus the descriptor that produced it. */
+export interface ListArchetype {
+	descriptor: unknown
+	node: Node
+}
+
+/** Per-reconciler store of archetypes keyed by structural shape. */
+export type ListArchetypes = Map<string, ListArchetype>
+
 /** Inflation facade the reconciler drives. Implemented by `WebInflator`. */
 export interface ListInflation {
 	/**
 	 * Inflates `item` into a node, unwrapping arrow components to the descriptor
 	 * they render. Returns `null` for items that produce nothing (nullish items).
+	 * Same-shape items after the first are produced by cloning the archetype
+	 * registered in `archetypes` and rebinding the differences, falling back to
+	 * full inflation when the shape is not cloneable.
 	 */
-	inflateListItem(item: unknown): { node: Node, descriptor: unknown } | null
+	inflateListItem(item: unknown, archetypes: ListArchetypes): { node: Node, descriptor: unknown } | null
 
 	/**
 	 * Patches `record`'s node in place for a new `item`. Updates
@@ -52,10 +67,14 @@ export class ListReconciler {
 	readonly #keepPlaceholder: boolean
 
 	#records: ListRecord[] = []
+	/** Cloning templates for item shapes seen in this list. */
+	readonly #archetypes: ListArchetypes = new Map
 	/** Node right before the list region, anchoring insertions at the region start. */
 	readonly #anchor: ChildNode | null
 	/** Placeholder comment kept while the region is empty and unanchored. */
 	#placeholder: Comment | null = null
+	/** Node that followed the region when it was last emptied — anchors refills of an emptied region. */
+	#regionEnd: ChildNode | null = null
 
 	constructor(parent: ParentNode, inflation: ListInflation, options?: { placeholder?: boolean }) {
 		this.#parent = parent
@@ -87,7 +106,18 @@ export class ListReconciler {
 		}
 
 		if (newEnd < oldEnd) {
-			for (let index = newEnd + 1; index <= oldEnd; index++) this.#destroyRecord(records[index])
+			// Remember what followed the region when its tail is destroyed, so a
+			// refill of the emptied region lands between the same neighbors.
+			if (oldEnd === oldCount - 1) {
+				const lastNode = records[oldEnd].node as ChildNode | null
+				this.#regionEnd = lastNode?.nextSibling ?? null
+			}
+
+			// Bulk path: subscriptions are still released per record, but the DOM
+			// region goes in one native removal instead of one `.remove()` per row.
+			if (oldEnd - newEnd < BULK_REMOVE_MIN || this.#destroyRecordsBulk(records, newEnd + 1, oldEnd) === false) {
+				for (let index = newEnd + 1; index <= oldEnd; index++) this.#destroyRecord(records[index])
+			}
 			records.splice(newEnd + 1, oldEnd - newEnd)
 		} else if (oldEnd < newEnd) {
 			let insertCount = 0
@@ -119,14 +149,18 @@ export class ListReconciler {
 
 		if (this.#keepPlaceholder && this.#anchor == null && this.#placeholder == null) {
 			this.#placeholder = document.createComment("reactive-iterable")
-			this.#parent.appendChild(this.#placeholder)
+			if (this.#regionEnd != null && this.#regionEnd.parentNode === this.#parent) {
+				this.#parent.insertBefore(this.#placeholder, this.#regionEnd)
+			} else {
+				this.#parent.appendChild(this.#placeholder)
+			}
 		}
 	}
 
 	#createRecord(item: unknown): ListRecord | null {
 		if (item == null) return null
 
-		const inflated = this.#inflation.inflateListItem(item)
+		const inflated = this.#inflation.inflateListItem(item, this.#archetypes)
 		if (inflated == null || inflated.node == null) return null
 
 		return { item, descriptor: inflated.descriptor, node: inflated.node }
@@ -157,6 +191,38 @@ export class ListReconciler {
 	}
 
 	/**
+	 * Destroys the record run `from..to` with a single native range removal.
+	 * Subscriptions are still released per record — only the DOM removal is batched.
+	 * @returns false when the run cannot be removed as one range (Group parents,
+	 * nullish records, environments without Range support) — the caller then
+	 * falls back to per-record destruction, which stays correct.
+	 */
+	#destroyRecordsBulk(records: readonly ListRecord[], from: number, to: number): boolean {
+		if (this.#parent instanceof Group) return false
+
+		const first = records[from].node
+		const last = records[to].node
+		if (first == null || last == null) return false
+
+		for (let index = from; index <= to; index++) {
+			const node = records[index].node
+			if (node == null) return false
+			ListReconciler.#releaseTree(node)
+		}
+
+		try {
+			const range = document.createRange()
+			range.setStartBefore(first)
+			range.setEndAfter(last)
+			range.deleteContents()
+		} catch {
+			// Re-release is harmless (unsubscribe is idempotent); remove per node.
+			return false
+		}
+		return true
+	}
+
+	/**
 	 * Releases every subscription and derivation of a subtree, then removes it.
 	 * Descendants are only released — removing the root detaches the whole subtree.
 	 */
@@ -177,12 +243,12 @@ export class ListReconciler {
 	}
 
 	static #remove(node: Node, owner?: ParentNode): void {
-		// Group children are virtual (free-standing) — their removal must go through the group.
-		if (node.parentNode == null && owner instanceof Group && owner.contains(node)) {
-			owner.removeChild(node)
-			return
+		// Group children are virtual (free-standing) until the group connects; afterwards
+		// they live in the DOM while the group still tracks them — clean up both.
+		if (owner instanceof Group && owner.contains(node)) owner.removeChild(node)
+		if (node.parentNode != null) {
+			;(node as ChildNode).remove()
 		}
-		;(node as ChildNode).remove()
 	}
 
 	#insertRecords(records: readonly ListRecord[], before: ChildNode | null): void {
@@ -214,8 +280,13 @@ export class ListReconciler {
 		for (const node of nodes) this.#parent.insertBefore(node, ref)
 	}
 
-	/** Inserts `nodes` right after `after`, or at the start of the parent when null. */
+	/** Inserts `nodes` right after `after`, or at the region's recorded end / start of the parent when null. */
 	#insertAfter(after: ChildNode | null, nodes: Node[]): void {
+		if (after == null && this.#regionEnd != null && this.#regionEnd.parentNode === this.#parent) {
+			this.#insertBeforeRef(nodes, this.#regionEnd)
+			return
+		}
+
 		const ref = after != null ? after.nextSibling : this.#parent.firstChild
 		if (ref != null) {
 			this.#insertBeforeRef(nodes, ref as ChildNode)

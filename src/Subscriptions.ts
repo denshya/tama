@@ -6,71 +6,102 @@
  *
  * Most keys hold exactly one subscription, so an entry stores it directly and only
  * allocates a set once a second subscription lands on the same key.
+ *
+ * Node targets keep their map in a `$tamaBindings` expando — the same pattern as
+ * the `$EV` event expandos — so the dispose walk is a property read instead of a
+ * hash lookup and the map dies with the node even when it is never released
+ * explicitly. Non-Node targets fall back to a central WeakMap.
  */
 type Entry = { unsubscribe(): void } | Set<{ unsubscribe(): void }>
 
-function isSet(entry: Entry): entry is Set<{ unsubscribe(): void }> {
-	return entry instanceof Set
+const BINDINGS = "$tamaBindings"
+
+const fallbackTargets = new WeakMap<object, Map<PropertyKey, Entry>>()
+
+function bindingsOf(target: object, create: boolean): Map<PropertyKey, Entry> | undefined {
+	let bindings: Map<PropertyKey, Entry> | undefined
+
+	if (target instanceof Node) {
+		bindings = (target as any)[BINDINGS]
+		if (bindings == null && create) {
+			bindings = new Map
+			;(target as any)[BINDINGS] = bindings
+		}
+		return bindings
+	}
+
+	bindings = fallbackTargets.get(target)
+	if (bindings == null && create) {
+		bindings = new Map
+		fallbackTargets.set(target, bindings)
+	}
+	return bindings
+}
+
+function unsubscribeEntry(entry: Entry): void {
+	if (entry instanceof Set) {
+		for (const subscription of entry) subscription.unsubscribe()
+		return
+	}
+	entry.unsubscribe()
 }
 
 export class Subscriptions {
-	private readonly targets = new Map<object, Map<PropertyKey, Entry>>()
-
 	/** Tracks `subscription` under `key` on `target`. */
 	track(target: object, key: PropertyKey, subscription: { unsubscribe(): void }): void {
-		let perKey = this.targets.get(target)
-		if (perKey == null) {
-			perKey = new Map
-			this.targets.set(target, perKey)
-		}
+		const bindings = bindingsOf(target, true)!
 
-		const entry = perKey.get(key)
+		const entry = bindings.get(key)
 		if (entry == null) {
-			perKey.set(key, subscription)
+			bindings.set(key, subscription)
 			return
 		}
-		if (isSet(entry)) {
+		if (entry instanceof Set) {
 			entry.add(subscription)
 			return
 		}
-		perKey.set(key, new Set([entry, subscription]))
+		bindings.set(key, new Set([entry, subscription]))
+	}
+
+	/** Releases the entry under `key` and tracks `subscription` in its place — the rebind path. */
+	replace(target: object, key: PropertyKey, subscription: { unsubscribe(): void }): void {
+		const bindings = bindingsOf(target, true)!
+
+		const entry = bindings.get(key)
+		if (entry != null) unsubscribeEntry(entry)
+		bindings.set(key, subscription)
 	}
 
 	/** Releases every subscription tracked under `key` on `target`. */
 	release(target: object, key: PropertyKey): void {
-		const perKey = this.targets.get(target)
-		const entry = perKey?.get(key)
+		const bindings = bindingsOf(target, false)
+		const entry = bindings?.get(key)
 		if (entry == null) return
 
-		if (isSet(entry)) {
-			for (const subscription of entry) subscription.unsubscribe()
-		} else {
-			entry.unsubscribe()
-		}
-		perKey!.delete(key)
-		if (perKey!.size === 0) this.targets.delete(target)
+		unsubscribeEntry(entry)
+		bindings!.delete(key)
+		if (bindings!.size === 0) this.#forget(target)
 	}
 
 	/** Releases every subscription tracked on `target` and forgets the target. */
 	dispose(target: object): void {
-		const perKey = this.targets.get(target)
-		if (perKey == null) return
+		const bindings = bindingsOf(target, false)
+		if (bindings == null) return
 
-		for (const entry of perKey.values()) {
-			if (isSet(entry)) {
-				for (const subscription of entry) subscription.unsubscribe()
-			} else {
-				entry.unsubscribe()
-			}
-		}
-
-		perKey.clear()
-		this.targets.delete(target)
+		for (const entry of bindings.values()) unsubscribeEntry(entry)
+		bindings.clear()
+		this.#forget(target)
 	}
 
 	/** Whether anything is tracked on `target`. Handy for tests. */
 	has(target: object): boolean {
-		return this.targets.has(target)
+		const bindings = bindingsOf(target, false)
+		return bindings != null && bindings.size > 0
+	}
+
+	#forget(target: object): void {
+		if (target instanceof Node) delete (target as any)[BINDINGS]
+		else fallbackTargets.delete(target)
 	}
 }
 

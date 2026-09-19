@@ -167,12 +167,144 @@ describe("ListReconciler", () => {
 
     const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
     document.body.append(ul)
-
     list.set([])
     expect(ul.children.length).toBe(0)
 
     list.set([<li>a</li>, <li>b</li>])
     expect([...ul.children].map(child => child.textContent)).toEqual(["a", "b"])
+  })
+
+  it("bulk-removes a large list without touching surrounding nodes", () => {
+    const list = new StateArray(Array.from({ length: 40 }, (_, index) => <li>{index}</li>))
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    // Surrounding nodes outside the list region must survive the bulk removal.
+    const head = document.createElement("li")
+    head.textContent = "head"
+    const tail = document.createElement("li")
+    tail.textContent = "tail"
+    ul.prepend(head)
+    ul.append(tail)
+
+    list.set([])
+    expect(ul.children.length).toBe(2)
+    expect(ul.children[0].textContent).toBe("head")
+    expect(ul.children[1].textContent).toBe("tail")
+
+    list.set([<li>fresh</li>])
+    expect([...ul.children].map(child => child.textContent)).toEqual(["head", "fresh", "tail"])
+  })
+
+  it("releases bindings of bulk-removed records", () => {
+    const className = new State("on")
+    const list = new StateArray(Array.from({ length: 40 }, (_, index) => <li className={className}>{index}</li>))
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+    expect(ul.children[0].className).toBe("on")
+
+    const detached = [...ul.children] as HTMLElement[]
+    list.set([])
+
+    className.set("off")
+    // Every bulk-removed row was released — none follows the state anymore.
+    for (const row of detached) expect(row.className).toBe("on")
+    expect(ul.children.length).toBe(0)
+  })
+
+  it("bulk-removes inside a group parent", () => {
+    const list = new StateArray(Array.from({ length: 40 }, (_, index) => <span>{index}</span>))
+
+    const group = inflator.inflate(list) as HTMLElement
+    document.body.append(group)
+    expect(group.textContent!.length).toBeGreaterThan(0)
+
+    list.set([])
+    expect(group.textContent).toBe("")
+
+    list.set([<span>one</span>, <span>two</span>])
+    expect(group.textContent).toBe("onetwo")
+  })
+
+  it("clones same-shape items with their own static content", () => {
+    const list = new StateArray([<li>first</li>, <li>second</li>, <li>third</li>])
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    // Items two and three are archetype clones — static differences must be written.
+    expect([...ul.children].map(child => child.textContent)).toEqual(["first", "second", "third"])
+  })
+
+  it("cloned items carry live bindings of their own sources", () => {
+    const label1 = new State("one")
+    const label2 = new State("two")
+    const list = new StateArray([<li>{label1}</li>, <li>{label2}</li>])
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    expect([...ul.children].map(child => child.textContent)).toEqual(["one", "two"])
+
+    label2.set("two!")
+    expect(ul.children[1].textContent).toBe("two!")
+
+    // The archetype-derived clone of row one still tracks only its own source.
+    label1.set("one!")
+    expect(ul.children[0].textContent).toBe("one!")
+    expect(ul.children[1].textContent).toBe("two!")
+  })
+
+  it("cloned items bind their own event handlers", () => {
+    const clicks: string[] = []
+    const list = new StateArray([
+      <button on={{ click: () => clicks.push("a") }}>a</button>,
+      <button on={{ click: () => clicks.push("b") }}>b</button>,
+    ])
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    const first = ul.children[0] as HTMLElement
+    const second = ul.children[1] as HTMLElement
+    expect(second).not.toBe(first) // Distinct nodes, same shape — the second is a clone.
+
+    first.click()
+    second.click()
+    expect(clicks).toEqual(["a", "b"])
+  })
+
+  it("falls back to full inflation across shapes and keeps archetypes per shape", () => {
+    const list = new StateArray([<li>x</li>, <div>y</div>, <li>z</li>])
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    expect([...ul.children].map(child => child.tagName + ":" + child.textContent)).toEqual([
+      "LI:x", "DIV:y", "LI:z",
+    ])
+  })
+
+  it("does not clone guarded items", () => {
+    const mounted1 = new State(true)
+    const mounted2 = new State(true)
+    const list = new StateArray([
+      <li mounted={mounted1}>one</li>,
+      <li mounted={mounted2}>two</li>,
+    ])
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    expect(ul.children.length).toBe(2)
+    expect([...ul.children].map(child => child.textContent)).toEqual(["one", "two"])
+
+    // Toggling either guard only affects its own row.
+    mounted1.set(false)
+    expect(ul.children.length).toBe(1)
+    expect(ul.children[0].textContent).toBe("two")
   })
 
   it("renders through a reconciled map without re-running surviving predicates", () => {
