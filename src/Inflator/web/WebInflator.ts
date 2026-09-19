@@ -13,7 +13,7 @@ import { ProtonComponent } from "@/Proton/ProtonComponent"
 import { ProtonRef } from "@/Proton/ProtonRef"
 import { ChildrenType } from "@/jsx/ProtonJSX"
 import { ListArchetypes, ListInflation, ListReconciler, ListRecord } from "@/Reconciler/ListReconciler"
-import { subscriptions } from "@/Subscriptions"
+import { noteNestedLiveList, subscriptions } from "@/Subscriptions"
 import { isIterable, isJSX, isRecord } from "@/utils/testers"
 import WebNodeBinding from "@/utils/WebNodeBinding"
 
@@ -131,7 +131,12 @@ class WebInflator extends Inflator implements ListInflation {
     const update = (source: IteratorObject<T>) => reconciler.reconcile(toItems(source))
 
     update(iterableOf(iterable))
-    iterable.subscribe?.(update)
+    if (iterable.subscribe != null) {
+      // A live inner list can grow bound nodes at runtime — the outer record's
+      // bound set would go stale, so it falls back to the subtree release walk.
+      noteNestedLiveList()
+      iterable.subscribe(update)
+    }
 
     return parent
   }
@@ -144,7 +149,12 @@ class WebInflator extends Inflator implements ListInflation {
     const update = (source: IteratorObject<T>) => reconciler.reconcile(toItems(source))
 
     update(iterableOf(iterable))
-    iterable.subscribe?.(update)
+    if (iterable.subscribe != null) {
+      // A live inner list can grow bound nodes at runtime — the outer record's
+      // bound set would go stale, so it falls back to the subtree release walk.
+      noteNestedLiveList()
+      iterable.subscribe(update)
+    }
   }
   protected inflateAsyncIterable<T>(asyncIterable: AsyncIteratorObject<T>): unknown {
     throw new TypeError("Async Iterator is not supported", { cause: { asyncIterable } })

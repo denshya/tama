@@ -307,6 +307,69 @@ describe("ListReconciler", () => {
     expect(ul.children[0].textContent).toBe("two")
   })
 
+  it("releases bindings acquired only during patch", () => {
+    const label = new State("bound")
+    const list = new StateArray([<li>plain</li>])
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    // The patch binds the row's text to `label` — a binding the record did not have at creation.
+    list.set([<li>{label}</li>])
+    const row = ul.children[0] as HTMLElement
+    expect(row.textContent).toBe("bound")
+
+    list.set([])
+    label.set("changed")
+    expect(row.textContent).toBe("bound") // Released on destroy — frozen.
+    expect(ul.children.length).toBe(0)
+  })
+
+  it("releases bindings of records containing a live inner list", () => {
+    const outer = new StateArray([
+      { id: "a", items: new StateArray([<span>a1</span>]) },
+      { id: "b", items: new StateArray([<span>b1</span>]) },
+    ])
+
+    const ul = inflator.inflate(<ul>{outer.map(entry => <li>{entry.items}</li>)}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    expect([...ul.querySelectorAll("span")].map(span => span.textContent)).toEqual(["a1", "b1"])
+
+    // Grow the inner lists AFTER creation — runtime-acquired bindings the record's
+    // create-time bound set cannot know about.
+    outer.get()[0].items.set([<span>a1</span>, <span>a2</span>])
+    expect([...ul.querySelectorAll("span")].map(span => span.textContent)).toEqual(["a1", "a2", "b1"])
+
+    const detachedSpans = [...ul.querySelectorAll("span")] as HTMLElement[]
+    outer.set([])
+
+    expect(ul.querySelectorAll("span").length).toBe(0)
+    // The inner spans were released through the fallback walk — content stays frozen.
+    for (const span of detachedSpans) expect(span.textContent!.length).toBeGreaterThan(0)
+  })
+
+  it("reuses pooled records correctly across clear and refill", () => {
+    const first = new State("one")
+    const second = new State("two")
+    const list = new StateArray([<li>{first}</li>])
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    list.set([<li>{second}</li>]) // Patch.
+    list.set([]) // Destroy — record and bound set recycle.
+    list.set([<li>fresh</li>]) // Create — pops the recycled record.
+
+    expect(ul.children.length).toBe(1)
+    expect(ul.children[0].textContent).toBe("fresh")
+
+    // The recycled record must carry only the new binding: the old state no longer reaches it.
+    first.set("GHOST")
+    second.set("GHOST")
+    expect(ul.children[0].textContent).toBe("fresh")
+  })
+
   it("renders through a reconciled map without re-running surviving predicates", () => {
     const rows = new StateArray<{ id: number, label: State<string> }>([])
     rows.reconciler = StateReconciler.IDENTITY

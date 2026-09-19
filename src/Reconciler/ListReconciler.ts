@@ -1,6 +1,6 @@
 import { Group } from "node-group"
 
-import { subscriptions } from "@/Subscriptions"
+import { collectTracked, subscriptions } from "@/Subscriptions"
 
 /** Destroyed runs of at least this many records go through one native range removal. */
 const BULK_REMOVE_MIN = 32
@@ -10,11 +10,15 @@ const BULK_REMOVE_MIN = 32
  * `item` is the last source value rendered at this position — its identity is
  * the reconciliation fast path — while `descriptor` is the unwrapped value
  * actually inflated (arrow components pre-evaluated), used for in-place patching.
+ * `bound` collects exactly the nodes that received bindings while this record
+ * inflated or patched, so destruction releases them without walking the subtree;
+ * `null` (records with live inner lists) falls back to the subtree walk.
  */
 export interface ListRecord {
 	item: unknown
 	descriptor: unknown
 	node: Node | null
+	bound: Set<object> | null
 }
 
 /** Inert template of one item shape — a detached snapshot plus the descriptor that produced it. */
@@ -69,6 +73,9 @@ export class ListReconciler {
 	#records: ListRecord[] = []
 	/** Cloning templates for item shapes seen in this list. */
 	readonly #archetypes: ListArchetypes = new Map
+	/** Recycled records and bound sets — destroy refills them, create drains them. */
+	readonly #recordPool: ListRecord[] = []
+	readonly #boundPool: Set<object>[] = []
 	/** Node right before the list region, anchoring insertions at the region start. */
 	readonly #anchor: ChildNode | null
 	/** Placeholder comment kept while the region is empty and unanchored. */
@@ -160,34 +167,83 @@ export class ListReconciler {
 	#createRecord(item: unknown): ListRecord | null {
 		if (item == null) return null
 
-		const inflated = this.#inflation.inflateListItem(item, this.#archetypes)
+		const { result: inflated, tracked, nestedLiveList } = collectTracked(() => this.#inflation.inflateListItem(item, this.#archetypes))
 		if (inflated == null || inflated.node == null) return null
 
-		return { item, descriptor: inflated.descriptor, node: inflated.node }
+		const record = this.#recordPool.pop() ?? {} as ListRecord
+		record.item = item
+		record.descriptor = inflated.descriptor
+		record.node = inflated.node
+		record.bound = nestedLiveList ? null : tracked.size > 0 ? tracked : this.#adoptBoundSet()
+		return record
 	}
 
 	#patchRecord(record: ListRecord, item: unknown, index: number): void {
-		if (this.#inflation.patchListItem(record, item)) {
+		const { result: patched, tracked, nestedLiveList } = collectTracked(() => this.#inflation.patchListItem(record, item))
+		if (patched) {
 			record.item = item
+			// Bindings acquired only during patch (a node that had none before) must
+			// be released on destroy too.
+			if (record.bound != null && nestedLiveList === false) {
+				for (const target of tracked) record.bound.add(target)
+			} else if (nestedLiveList) {
+				record.bound = null
+			}
 			return
 		}
 
 		// Shape mismatch — rebuild the position, reusing its place in the DOM.
+		// The record object stays live (reassigned below) — release its old state
+		// without recycling it into the pool.
 		const reference = record.node as ChildNode | null
 		const created = this.#createRecord(item)
 
 		if (reference != null) this.#insertBeforeRef(created?.node ? [created.node] : [], reference)
 		else if (created?.node != null) this.#insertRecords([created], this.#firstNodeAt(this.#records, index + 1))
 
-		this.#destroyRecord(record)
+		this.#releaseRecord(record)
+		if (record.node != null) ListReconciler.destroyNode(record.node, this.#parent)
 
 		record.item = item
 		record.descriptor = created?.descriptor
 		record.node = created?.node ?? null
+		if (created?.bound != null && record.bound != null) {
+			record.bound.clear()
+			this.#boundPool.push(record.bound)
+		}
+		record.bound = created?.bound ?? record.bound
 	}
 
 	#destroyRecord(record: ListRecord): void {
+		this.#releaseRecord(record)
 		if (record.node != null) ListReconciler.destroyNode(record.node, this.#parent)
+		this.#recycleRecord(record)
+	}
+
+	/** Releases a record's bindings — its bound set when present, the subtree walk otherwise. */
+	#releaseRecord(record: ListRecord): void {
+		const bound = record.bound
+		if (bound == null) {
+			if (record.node != null) ListReconciler.#releaseTree(record.node)
+			return
+		}
+		for (const target of bound) subscriptions.dispose(target)
+	}
+
+	#recycleRecord(record: ListRecord): void {
+		if (record.bound != null) {
+			record.bound.clear()
+			this.#boundPool.push(record.bound)
+		}
+		record.item = undefined
+		record.descriptor = undefined
+		record.node = null
+		record.bound = null
+		this.#recordPool.push(record)
+	}
+
+	#adoptBoundSet(): Set<object> {
+		return this.#boundPool.pop() ?? new Set
 	}
 
 	/**
@@ -205,9 +261,9 @@ export class ListReconciler {
 		if (first == null || last == null) return false
 
 		for (let index = from; index <= to; index++) {
-			const node = records[index].node
-			if (node == null) return false
-			ListReconciler.#releaseTree(node)
+			const record = records[index]
+			if (record.node == null) return false
+			this.#releaseRecord(record)
 		}
 
 		try {
@@ -219,6 +275,8 @@ export class ListReconciler {
 			// Re-release is harmless (unsubscribe is idempotent); remove per node.
 			return false
 		}
+
+		for (let index = from; index <= to; index++) this.#recycleRecord(records[index])
 		return true
 	}
 

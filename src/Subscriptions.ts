@@ -18,6 +18,44 @@ const BINDINGS = "$tamaBindings"
 
 const fallbackTargets = new WeakMap<object, Map<PropertyKey, Entry>>()
 
+/** Active bound-node sink, set while a list record inflates or patches. @internal */
+let trackingSink: Set<object> | null = null
+/** Set when a live inner list inflates inside the tracking window. @internal */
+let trackingNestedLiveList = false
+
+function trackIntoSink(target: object): void {
+	trackingSink?.add(target)
+}
+
+/**
+ * Marks the current tracking window as containing a live inner list — its region
+ * can grow bound nodes at runtime, outside any window, so a bound set would go
+ * stale. Records of such items fall back to the subtree release walk.
+ * @internal
+ */
+export function noteNestedLiveList(): void {
+	if (trackingSink != null) trackingNestedLiveList = true
+}
+
+/**
+ * Runs `fn` while collecting every target that receives a tracked binding —
+ * the reconciler stores the set so destruction releases exactly the bound
+ * nodes instead of walking whole subtrees.
+ * @internal
+ */
+export function collectTracked<T>(fn: () => T): { result: T, tracked: Set<object>, nestedLiveList: boolean } {
+	const previous = trackingSink
+	const tracked = new Set<object>
+	trackingSink = tracked
+	trackingNestedLiveList = false
+	try {
+		const result = fn()
+		return { result, tracked, nestedLiveList: trackingNestedLiveList }
+	} finally {
+		trackingSink = previous
+	}
+}
+
 function bindingsOf(target: object, create: boolean): Map<PropertyKey, Entry> | undefined {
 	let bindings: Map<PropertyKey, Entry> | undefined
 
@@ -49,6 +87,7 @@ function unsubscribeEntry(entry: Entry): void {
 export class Subscriptions {
 	/** Tracks `subscription` under `key` on `target`. */
 	track(target: object, key: PropertyKey, subscription: { unsubscribe(): void }): void {
+		trackIntoSink(target)
 		const bindings = bindingsOf(target, true)!
 
 		const entry = bindings.get(key)
@@ -65,6 +104,7 @@ export class Subscriptions {
 
 	/** Releases the entry under `key` and tracks `subscription` in its place — the rebind path. */
 	replace(target: object, key: PropertyKey, subscription: { unsubscribe(): void }): void {
+		trackIntoSink(target)
 		const bindings = bindingsOf(target, true)!
 
 		const entry = bindings.get(key)
