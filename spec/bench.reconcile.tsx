@@ -12,16 +12,18 @@ interface Row { id: State<number>, label: State<string> }
 const makeRows = (count: number, offset = 0): Row[] =>
 	Array.from({ length: count }, (_, index) => ({ id: new State(index + offset), label: new State(`item ${index + offset}`) }))
 
-group("List reconciliation — 1,000 rows via StateReconciler", () => {
+group("List reconciliation — 1,000 rows via reconciled map", () => {
 	const rows = new StateArray<Row>([])
-	rows.reconciler = new StateReconciler(row => (
+	rows.reconciler = StateReconciler.IDENTITY
+
+	const rowViews = rows.map(row => (
 		<tr class="row">
 			<td class="col-md-1">{row.id}</td>
 			<td class="col-md-4"><a class="label">{row.label}</a></td>
 		</tr>
 	))
 
-	const table = inflator.inflate(<table><tbody>{rows.reconciler}</tbody></table>) as HTMLElement
+	const table = inflator.inflate(<table><tbody>{rowViews}</tbody></table>) as HTMLElement
 	document.body.append(table)
 	const tbody = table.querySelector("tbody")!
 

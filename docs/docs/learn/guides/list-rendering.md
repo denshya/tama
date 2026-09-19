@@ -79,6 +79,8 @@ When a record leaves the list, every subscription bound to its nodes is released
 Derived states (like a `State.to` fork inside a row component) detach from their source once their last observer leaves — so a fork bound to a row's element dies with the row.
 Removing rows does not accumulate listeners or pinned nodes; a fork that is never bound to anything outlives its row, so always bind forks you render.
 
+This covers the framework's own bindings only. Subscriptions a component makes to something outside its DOM (feeds, timers, window listeners) are not tracked — keep arrow components pure and own such effects in a `function` component through `this.disposal` (see [Component API](../unwinding/component-api.md)).
+
 ## What To Do In Practice
 
 The short version: use `StateArray` when the list itself is mutable, attach a `reconciler` when it grows large or updates often, and keep row-specific state in stable model objects when item identity must survive list changes.

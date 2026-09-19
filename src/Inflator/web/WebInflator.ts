@@ -1,10 +1,10 @@
-import { Scope, State } from "@denshya/reactive"
+import { State } from "@denshya/reactive"
 import { Group } from "node-group"
 import { Primitive } from "type-fest"
 
 import { AccessorGet } from "@/Accessor"
 import { AsyncFunction, AsyncGeneratorFunction } from "@/BuiltinObjects"
-import { Disposal, DISPOSAL, withinScope } from "@/Disposal"
+import { Disposal } from "@/Disposal"
 import { InsertionGroup } from "@/InsertionGroup"
 import { CustomAttributesMap, JSXAttributeSetup } from "@/jsx/JSXCustomizationAPI"
 import { MountGuard } from "@/MountGuard"
@@ -380,13 +380,7 @@ class WebInflator extends Inflator implements ListInflation {
     }
     // If arrow function, simplify inflation.
     if (factory.prototype == null && factory instanceof AsyncFunction.constructor === false) {
-      // Scope derivations created by the factory and its inflation (e.g. `State.to` forks)
-      // to a disposal chained to the node, so a reconciler removing the node can release them.
-      const disposal = new Disposal
-      withinScope(disposal)
-      const view = Scope.within(() => disposal.signal, () => this.inflate(factory(props)))
-      if (view instanceof Node) (view as any)[DISPOSAL] ??= disposal
-      return view
+      return this.inflate(factory(props))
     }
 
     const mounted = props?.mounted
@@ -399,7 +393,7 @@ class WebInflator extends Inflator implements ListInflation {
     WebInflator.final.register(componentGroup, component.disposal)
 
     try {
-      component.view.initWith(Scope.within(component.disposal.signal, () => factory.call(component, props)))
+      component.view.initWith(factory.call(component, props))
     } catch (thrown) {
       component.tree.caught(thrown)
       console.error(thrown)
@@ -411,7 +405,7 @@ class WebInflator extends Inflator implements ListInflation {
       mountState = MountGuard.truthy(mounted) === false
     }
 
-    const currentView = Scope.within(component.disposal.signal, () => component.inflator.inflate(component.view.current)) as ChildNode | null
+    const currentView = component.inflator.inflate(component.view.current) as ChildNode | null
     replace(currentView)
 
     function replace(view: unknown | null) {
@@ -426,7 +420,7 @@ class WebInflator extends Inflator implements ListInflation {
 
     let lastAnimationFrame = -1
     component.view.subscribe(view => {
-      view = Scope.within(component.disposal.signal, () => component.inflator.inflate(view))
+      view = component.inflator.inflate(view)
 
       if (component.view.default == null && component.view.current == null) {
         // Skip scheduling if it's the first view to avoid unnecessary layout-paint.

@@ -1,6 +1,5 @@
 import { Group } from "node-group"
 
-import { DISPOSAL } from "@/Disposal"
 import { subscriptions } from "@/Subscriptions"
 
 /**
@@ -167,7 +166,6 @@ export class ListReconciler {
 	}
 
 	static #releaseTree(node: Node): void {
-		;(node as any)[DISPOSAL]?.[Symbol.dispose]()
 		subscriptions.dispose(node)
 
 		let child = node.firstChild

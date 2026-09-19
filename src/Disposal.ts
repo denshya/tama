@@ -1,5 +1,3 @@
-import { Scope } from "@denshya/reactive"
-
 import { onDemandRef } from "./Inflator/web/helpers"
 import { Subscription } from "./Observable"
 
@@ -8,8 +6,9 @@ import { Subscription } from "./Observable"
  *
  * A disposal is an `AbortSignal` factory: `add` ties an effect to the signal,
  * and aborting the signal (or `using` the disposal) runs every effect once.
- * Combined with `Scope`, derivations created inside the signal's scope —
- * like `State.to` forks — detach automatically when the disposal aborts.
+ * Class components expose one as `this.disposal` — it is the owner for effects
+ * whose lifetime matches the component: pass `this.disposal.signal` into
+ * `subscribe`-style APIs and `add` everything else (timers, listeners).
  */
 export class Disposal {
 	/** @internal */
@@ -43,19 +42,4 @@ export class Disposal {
 	[Symbol.dispose](): void {
 		this.controller.current.abort()
 	}
-}
-
-/** Property key under which an inflated node carries the disposal of its creation scope. @internal */
-export const DISPOSAL: unique symbol = Symbol("tama.disposal")
-
-/**
- * Chains `disposal` to the ambient scope, if any — it dies together with its owner.
- * @internal
- */
-export function withinScope(disposal: Disposal): void {
-	const outer = Scope.signal()
-	if (outer == null) return
-
-	if (outer.aborted) disposal[Symbol.dispose]()
-	else outer.addEventListener("abort", () => disposal[Symbol.dispose](), { once: true })
 }
