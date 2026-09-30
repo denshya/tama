@@ -783,7 +783,18 @@ class WebInflator extends Inflator implements ListInflation {
       }
 
       WebInflator.unbind(element, key)
-      if (isSVG || key.includes("-")) element.removeAttribute(key)
+      if (isSVG || key.includes("-")) {
+        element.removeAttribute(key)
+      } else {
+        // A property bind reflects back into an attribute (`disabled`, `checked`, …), and
+        // a cloned archetype node is snapshotted with the first item's attributes. Dropping
+        // the binding alone leaves both behind, so a sibling that never declared the prop —
+        // patched onto the same clone — would keep the archetype's stale value.
+        try {
+          element.removeAttribute(key)
+          delete (element as any)[key]
+        } catch { /* ignore invalid or non-configurable keys */ }
+      }
     }
 
     return this.patchChildren(element, oldJsx, newJsx)
