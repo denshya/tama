@@ -8,6 +8,7 @@
         "node-group": "0.1.7",
       },
       "devDependencies": {
+        "@denshya/reactive": "file:../flow/denshya-reactive-0.11.3.tgz",
         "@types/bun": "1.3.14",
         "@typescript-eslint/eslint-plugin": "8.66.0",
         "@typescript-eslint/parser": "8.66.0",
@@ -28,7 +29,7 @@
     },
   },
   "packages": {
-    "@denshya/reactive": ["@denshya/reactive@0.10.0", "", {}, "sha512-wMLKw7jgZ2xL6rl+KWw/8yw6D5lsRsasOUwgttjE+ML10WcmhLpG2b7tAPc29wU1KtWwGcBRJrd1Aukk77SA+g=="],
+    "@denshya/reactive": ["@denshya/reactive@../flow/denshya-reactive-0.11.3.tgz", {}, "sha512-02AiLBsLr+FwNVq4jhHmuYSeihh2e1/xVhm/gUEAVcPzX3EpKAENiNw7GhVG09LZ14YV0td2jTxorh8EBBu3Hw=="],
 
     "@emnapi/core": ["@emnapi/core@1.11.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA=="],
 

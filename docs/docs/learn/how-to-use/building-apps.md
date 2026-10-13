@@ -169,9 +169,9 @@ Continue with the [Routing guide](./router.md).
 ## Lists
 
 Tama accepts arrays and iterables directly as children.
-For changing collections, prefer `StateArray` or explicit array replacement through `State.set(...)`.
+For changing collections, prefer `StateArray` or explicit array replacement through `State.set(...)`; for large or frequently mutated lists, install a reconciler (`rows.reconciler = StateReconciler.IDENTITY`) so `map` keeps the views of surviving items and their DOM nodes.
 
-The important difference from React is that iterable updates are replaced as a whole rather than keyed and reconciled item-by-item.
+List updates are reconciled positionally without keys — identical items keep their nodes, changed items are patched in place — which differs from React's keyed reconciliation.
 
 Continue with the [List Rendering guide](../guides/list-rendering.md).
 
