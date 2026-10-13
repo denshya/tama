@@ -29,26 +29,6 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: Install spec deps
-        working-directory: ./spec
-        run: bun i --silent
-
-      - name: Install docs deps
-        working-directory: ./docs
-        run: bun i --silent
-
-      - name: Build Project
-        run: |
-          bun i --silent
-          bun run build
-
-      - name: Build Specification
-        run: bun docs/generate-spec.ts
-
-      - name: Build Benchmark Results
-        working-directory: ./spec
-        run: bun ../docs/generate-benchmark.ts > ../docs/docs/benchmarks.md
-
       - uses: denshya/documaru@v1
         with:
           path: docs/docs
