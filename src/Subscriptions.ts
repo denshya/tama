@@ -146,4 +146,4 @@ export class Subscriptions {
 }
 
 /** Process-wide registry of node-bound subscriptions. @internal */
-export const subscriptions = new Subscriptions
+export const subscriptions: Subscriptions = new Subscriptions
