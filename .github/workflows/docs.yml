@@ -22,58 +22,48 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install spec deps
+        working-directory: ./spec
+        run: bun i --silent
+
+      - name: Install docs deps
+        working-directory: ./docs
+        run: bun i --silent
+
+      - name: Build Project
+        run: |
+          bun i --silent
+          bun run build
+
+      - name: Build Specification
+        run: bun docs/generate-spec.ts
+
+      - name: Build Benchmark Results
+        working-directory: ./spec
+        run: bun ../docs/generate-benchmark.ts > ../docs/docs/benchmarks.md
+
+      - uses: denshya/documaru@v1
+        with:
+          path: docs/docs
+          base-url: /
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
   deploy:
+    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install spec deps
-        working-directory: ./spec
-        run: |
-          bun i --silent
-
-      - name: Install docs deps
-        working-directory: ./docs
-        run: |
-          bun i --silent
-
-      - name: Build Project
-        working-directory: ./
-        run: |
-          bun i --silent
-          bun run build
-
-      - name: Build Docs | Specification
-        working-directory: ./
-        run: |
-          bun docs/generate-spec.ts
-
-      - name: Build Docs | Benchmark
-        working-directory: ./spec
-        run: |
-          bun ../docs/generate-benchmark.ts > ../docs/docs/benchmarks.md
-
-      - name: Build Docs
-        working-directory: ./docs
-        run: bun run build
-
-      - name: Build Docs - SSG
-        working-directory: ./docs
-        run: bun run build:ssg
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './docs/build'
-      - name: Deploy to GitHub Pages
+      - uses: actions/deploy-pages@v4
         id: deployment
-        uses: actions/deploy-pages@v4
