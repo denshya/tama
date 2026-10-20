@@ -1,4 +1,4 @@
-import { IsEqual, LiteralUnion, StringSlice } from "type-fest"
+import { IsEqual, LiteralUnion } from "@/type-helpers"
 
 import { Accessible, AccessorGet } from "../Accessor"
 import Guarded from "../Guarded"
@@ -7,10 +7,7 @@ import { ChildrenType } from "./ProtonJSX"
 
 
 
-type OtherString = string & {}
-type BooleanLike =
-  | (true | false)
-  | ("true" | "false")
+type BooleanLike = boolean | "true" | "false"
 
 
 type AriaBooleanKeys =
@@ -24,11 +21,10 @@ type AriaBooleanKeys =
   | "ariaRequired"
   | "ariaSelected"
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type AriaUnprefixed<K extends keyof ARIAMixin> = K extends "role" ? "role" : StringSlice<Lowercase<K>, 4>
+type AriaValue<K extends keyof ARIAMixin> = K extends AriaBooleanKeys ? BooleanLike | ARIAMixin[K] : ARIAMixin[K]
 
 type AugmentedAria<T> = Omit<T, keyof ARIAMixin> & {
-  aria?: { [K in keyof ARIAMixin]?: JSX.Attribute<K extends AriaBooleanKeys ? (BooleanLike | OtherString | null) : ARIAMixin[K]> }
+  aria?: { [K in keyof ARIAMixin]?: JSX.Attribute<AriaValue<K>> }
 }
 
 

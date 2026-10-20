@@ -1,6 +1,5 @@
 import { State } from "@denshya/reactive"
 import { Group } from "node-group"
-import { Primitive } from "type-fest"
 
 import { AccessorGet } from "@/Accessor"
 import { AsyncFunction, AsyncGeneratorFunction } from "@/BuiltinObjects"
@@ -14,6 +13,7 @@ import { ProtonRef } from "@/Proton/ProtonRef"
 import { ChildrenType } from "@/jsx/ProtonJSX"
 import { ListArchetypes, ListInflation, ListReconciler, ListRecord } from "@/Reconciler/ListReconciler"
 import { noteNestedLiveList, subscriptions } from "@/Subscriptions"
+import { Primitive } from "@/type-helpers"
 import { isIterable, isJSX, isRecord } from "@/utils/testers"
 import WebNodeBinding from "@/utils/WebNodeBinding"
 

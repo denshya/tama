@@ -1,4 +1,4 @@
-import { Primitive } from "type-fest"
+import { Primitive } from "@/type-helpers"
 
 
 export enum ChildrenType {
