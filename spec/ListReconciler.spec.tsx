@@ -71,6 +71,52 @@ describe("ListReconciler", () => {
     expect(ul.children[1].textContent).toBe("two-patched")
   })
 
+  it("patches between raw and property attribute spellings", () => {
+    const list = new StateArray([<li class="a" tabindex="1" />])
+
+    const ul = inflator.inflate(<ul>{list}</ul>) as HTMLElement
+    document.body.append(ul)
+
+    const row = ul.children[0] as HTMLElement
+    expect(row.className).toBe("a")
+    expect(row.tabIndex).toBe(1)
+
+    list.set([<li className="b" tabIndex={2} />])
+    expect(ul.children[0]).toBe(row)
+    expect(row.className).toBe("b")
+    expect(row.getAttribute("class")).toBe("b")
+    expect(row.tabIndex).toBe(2)
+
+    list.set([<li class="c" tabindex="3" />])
+    expect(row.className).toBe("c")
+    expect(row.getAttribute("class")).toBe("c")
+    expect(row.tabIndex).toBe(3)
+
+    list.set([<li />])
+    expect(row.hasAttribute("class")).toBe(false)
+    expect(row.hasAttribute("tabindex")).toBe(false)
+  })
+
+  it("patches between raw and property spellings for SVG attributes", () => {
+    const list = new StateArray([<circle strokeWidth="1" textAnchor="start" />])
+
+    const svg = inflator.inflate(<svg>{list}</svg>) as SVGSVGElement
+    document.body.append(svg)
+
+    const circle = svg.querySelector("circle")!
+    expect(circle.getAttribute("stroke-width")).toBe("1")
+    expect(circle.getAttribute("text-anchor")).toBe("start")
+
+    list.set([<circle stroke-width="2" textAnchor="end" />])
+    expect(svg.querySelector("circle")).toBe(circle)
+    expect(circle.getAttribute("stroke-width")).toBe("2")
+    expect(circle.getAttribute("text-anchor")).toBe("end")
+
+    list.set([<circle />])
+    expect(circle.hasAttribute("stroke-width")).toBe(false)
+    expect(circle.hasAttribute("text-anchor")).toBe(false)
+  })
+
   it("rebuilds a position on shape mismatch", () => {
     const row1 = <li>one</li>
     const list = new StateArray([row1, <li>two</li>])

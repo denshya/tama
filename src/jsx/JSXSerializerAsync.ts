@@ -85,7 +85,7 @@ class WebJSXSerializerAsync {
     if (jsx.type?.constructor === Symbol) return children
 
     const type = jsx.type
-    const attributes = WebJSXSerializer.jsxAttributesToString.call(this, jsx.props)
+    const attributes = WebJSXSerializer.jsxAttributesToString.call(this, jsx.props, type)
 
     if (WebJSXSerializer.selfClosingTags[type]) return "<" + type + attributes + "/>"
     if (children.length === 0) return "<" + type + attributes + "></" + type + ">"

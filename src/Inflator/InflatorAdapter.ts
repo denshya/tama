@@ -1,4 +1,4 @@
-import { Simplify } from "type-fest"
+import { Simplify } from "@/type-helpers"
 
 import Inflator from "./Inflator"
 

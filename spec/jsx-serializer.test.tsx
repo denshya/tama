@@ -57,6 +57,16 @@ describe("WebJSXSerializer", () => {
     expect(serializer.toString(jsx as any)).toBe("<span class=\"c\">hey</span>")
   })
 
+  it("toString normalizes HTML attribute spellings", () => {
+    const jsx = { type: "label", props: { children: "x", class: "c", for: "field", tabindex: "1", "aria-label": "l" } }
+    expect(serializer.toString(jsx as any)).toBe('<label class="c" for="field" tabindex="1" aria-label="l">x</label>')
+  })
+
+  it("toString normalizes SVG attribute spellings", () => {
+    const jsx = { type: "circle", props: { className: "dot", strokeWidth: 2, textAnchor: "middle", tabIndex: 1 } }
+    expect(serializer.toString(jsx as any)).toBe('<circle class="dot" stroke-width="2" text-anchor="middle" tabindex="1"></circle>')
+  })
+
   it("toString self-closing tag without props", () => {
     const jsx = { type: "br", props: null }
     expect(serializer.toString(jsx as any)).toBe("<br/>")
