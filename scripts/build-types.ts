@@ -30,6 +30,19 @@ function walk(dir: string): string[] {
   return files
 }
 
+function walkManualDeclarations(dir: string): string[] {
+  const files: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...walkManualDeclarations(path))
+    } else if (entry.isFile() && entry.name.endsWith(".d.ts")) {
+      files.push(path)
+    }
+  }
+  return files
+}
+
 const { writeFileSync: rawWriteFileSync } = { writeFileSync }
 
 function writeWithManualOverride(path: string, content: string) {
@@ -114,4 +127,17 @@ for (const file of files) {
   }
 }
 
+const manualFiles = walkManualDeclarations(SRC)
+
+for (const file of manualFiles) {
+  const relativePath = relative(SRC, file)
+  const outPath = join(OUT, relativePath)
+  mkdirSync(dirname(outPath), { recursive: true })
+
+  let code = readFileSync(file, "utf-8")
+  code = rewriteAliases(code, dirname(file), dirname(outPath))
+  writeFileSync(outPath, code)
+}
+
 console.log(`Generated ${files.length} declaration files`)
+console.log(`Copied ${manualFiles.length} manual declarations`)
