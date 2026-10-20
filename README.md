@@ -16,9 +16,9 @@ It's based on the principle that I came up with: a library should define borders
 <h4 align="center">TypeScript Support, Treeshakable, Based on the <a href="https://dev.to/framemuse/no-framework-principle-arised-2n39">No Framework Principle</a></h4>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@denshya/proton">
-    <img src="https://img.shields.io/npm/v/@denshya/proton?color=007ec6" />
-    <img alt="npm package minimized gzipped size" src="https://img.shields.io/bundlejs/size/@denshya/proton">
+  <a href="https://www.npmjs.com/package/@denshya/tama">
+    <img src="https://img.shields.io/npm/v/@denshya/tama?color=007ec6" />
+    <img alt="npm package minimized gzipped size" src="https://img.shields.io/bundlejs/size/@denshya/tama">
   </a>
   <a href="http://commitizen.github.io/cz-cli/"><img src="https://img.shields.io/badge/commitizen-friendly-brightgreen.svg" alt="Commitizen friendly" /></a>
   <a href="https://stackblitz.com/@FrameMuse/collections/tama"><img alt="Static Badge" src="https://img.shields.io/badge/Playground%20Available-1389fd?logo=lightning"></a>
@@ -27,10 +27,10 @@ It's based on the principle that I came up with: a library should define borders
 ## Install
 
 ```bash
-bun i @denshya/proton
-npm i @denshya/proton
-pnpm i @denshya/proton
-yarn add @denshya/proton
+bun i @denshya/tama
+npm i @denshya/tama
+pnpm i @denshya/tama
+yarn add @denshya/tama
 ```
 
 ## What is "Rootless"?
@@ -192,7 +192,7 @@ Tama isn't perfect, it's being developed.
 ## Getting Started
 
 ```tsx
-import { WebInflator } from "@denshya/proton"
+import { WebInflator } from "@denshya/tama"
 
 function App() {
   return <div>Hello World!</div>
