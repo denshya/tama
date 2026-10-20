@@ -5,6 +5,7 @@ import { AccessorGet } from "@/Accessor"
 import { AsyncFunction, AsyncGeneratorFunction } from "@/BuiltinObjects"
 import { Disposal } from "@/Disposal"
 import { InsertionGroup } from "@/InsertionGroup"
+import { attributeNameForProperty, bindsAsAttribute, normalizeAttributeName } from "@/jsx/attributes"
 import { CustomAttributesMap, JSXAttributeSetup } from "@/jsx/JSXCustomizationAPI"
 import { MountGuard } from "@/MountGuard"
 import Observable from "@/Observable"
@@ -257,6 +258,7 @@ class WebInflator extends Inflator implements ListInflation {
     for (const key in props) {
       if (key === "children" || key === "ns") continue
       const value = props[key]
+      const name = normalizeAttributeName(key, isSVG)
 
       if (MountGuard.is(value)) {
         mountGuard ??= new MountGuard(inflated)
@@ -265,27 +267,27 @@ class WebInflator extends Inflator implements ListInflation {
         continue
       }
 
-      if (key === "ref") {
+      if (name === "ref") {
         if (value != null) ProtonRef.resolve(value, inflated)
         continue
       }
-      if (key === "className" || key === "class") {
+      if (name === "className" || name === "class") {
         if (value != null) this.bindClassName(value, inflated, isSVG)
         continue
       }
-      if (key === "style") {
+      if (name === "style") {
         if (value != null) this.bindStyle(value, inflated.style)
         continue
       }
-      if (key === "on") {
+      if (name === "on") {
         this.bindEventListeners(value, inflated)
         continue
       }
-      if (key === "aria") {
+      if (name === "aria") {
         if (isRecord(value)) this.bindNodeAria(value, inflated)
         continue
       }
-      if (key === "mounted") {
+      if (name === "mounted") {
         if (value != null) {
           (value as any).valid ??= truthyNonNull
           if (MountGuard.is(value)) {
@@ -299,11 +301,11 @@ class WebInflator extends Inflator implements ListInflation {
 
       // Unknown props — bind as attribute or property
       if (typeof value !== "object" && typeof value !== "function" && value != null) {
-        if (isSVG || key.includes("-")) inflated.setAttribute(key, value as string)
-        else (inflated as any)[key] = value
+        if (bindsAsAttribute(name, isSVG)) inflated.setAttribute(name, value as string)
+        else (inflated as any)[name] = value
       } else if (value != null) {
-        if (isSVG || key.includes("-")) WebInflator.subscribeAttribute(inflated, key, value)
-        else WebInflator.subscribeProperty(key, value, inflated)
+        if (bindsAsAttribute(name, isSVG)) WebInflator.subscribeAttribute(inflated, name, value)
+        else WebInflator.subscribeProperty(name, value, inflated)
       }
     }
 
@@ -700,40 +702,43 @@ class WebInflator extends Inflator implements ListInflation {
     }
 
     const isSVG = NAMESPACE_SVG.has(type)
+    const normalizedNewProps = new Set<string>()
+    for (const key in newProps) normalizedNewProps.add(normalizeAttributeName(key, isSVG))
 
     for (const key in newProps) {
       if (key === "children" || key === "ns") continue
       const value = newProps[key]
       const oldValue = oldProps[key]
+      const name = normalizeAttributeName(key, isSVG)
 
       if (MountGuard.is(value) || MountGuard.is(oldValue)) return false
 
-      if (key === "ref") {
+      if (name === "ref") {
         if (value != null && value !== oldValue) ProtonRef.resolve(value, element)
         continue
       }
-      if (key === "className" || key === "class") {
+      if (name === "className" || name === "class") {
         if (value !== oldValue) {
-          WebInflator.unbind(element, isSVG ? "class" : "className")
+          WebInflator.unbind(element, name)
           if (value != null) this.bindClassName(value, element, isSVG)
         }
         continue
       }
-      if (key === "style") {
+      if (name === "style") {
         if (value !== oldValue) {
           this.unbindStyle(element, oldValue)
           if (value != null) this.bindStyle(value, element.style)
         }
         continue
       }
-      if (key === "on") {
+      if (name === "on") {
         if (value !== oldValue) {
           WebInflator.unbindEventListeners(oldValue, element)
           this.bindEventListeners(value, element)
         }
         continue
       }
-      if (key === "aria") {
+      if (name === "aria") {
         if (value !== oldValue) {
           if (isRecord(oldValue)) for (const ariaKey in oldValue) WebInflator.unbind(element, ariaKey)
           if (isRecord(value)) this.bindNodeAria(value, element)
@@ -746,53 +751,55 @@ class WebInflator extends Inflator implements ListInflation {
       // Unknown props — bind as attribute or property, mirroring `bindIntrinsicProps`.
       // Observable binds replace the prior entry under the same key in one step.
       if (typeof value !== "object" && typeof value !== "function" && value != null) {
-        WebInflator.unbind(element, key)
-        if (isSVG || key.includes("-")) element.setAttribute(key, value as string)
-        else (element as any)[key] = value
+        WebInflator.unbind(element, name)
+        if (bindsAsAttribute(name, isSVG)) element.setAttribute(name, value as string)
+        else (element as any)[name] = value
       } else if (value != null) {
-        if (isSVG || key.includes("-")) WebInflator.subscribeAttribute(element, key, value, true)
-        else WebInflator.subscribeProperty(key, value, element, true)
+        if (bindsAsAttribute(name, isSVG)) WebInflator.subscribeAttribute(element, name, value, true)
+        else WebInflator.subscribeProperty(name, value, element, true)
       } else {
-        WebInflator.unbind(element, key)
+        WebInflator.unbind(element, name)
       }
     }
 
     // Props that were present before but are gone now — release their bindings.
     for (const key in oldProps) {
-      if (key in newProps || key === "children" || key === "ns") continue
+      if (key === "children" || key === "ns") continue
       const oldValue = oldProps[key]
+      const name = normalizeAttributeName(key, isSVG)
+      if (normalizedNewProps.has(name)) continue
 
-      if (key === "ref") continue
-      if (key === "className" || key === "class") {
-        WebInflator.unbind(element, isSVG ? "class" : "className")
+      if (name === "ref") continue
+      if (name === "className" || name === "class") {
+        WebInflator.unbind(element, name)
         element.removeAttribute("class")
         continue
       }
-      if (key === "style") {
+      if (name === "style") {
         this.unbindStyle(element, oldValue)
         element.removeAttribute("style")
         continue
       }
-      if (key === "on") {
+      if (name === "on") {
         WebInflator.unbindEventListeners(oldValue, element)
         continue
       }
-      if (key === "aria") {
+      if (name === "aria") {
         if (isRecord(oldValue)) for (const ariaKey in oldValue) WebInflator.unbind(element, ariaKey)
         continue
       }
 
-      WebInflator.unbind(element, key)
-      if (isSVG || key.includes("-")) {
-        element.removeAttribute(key)
+      WebInflator.unbind(element, name)
+      if (bindsAsAttribute(name, isSVG)) {
+        element.removeAttribute(name)
       } else {
         // A property bind reflects back into an attribute (`disabled`, `checked`, …), and
         // a cloned archetype node is snapshotted with the first item's attributes. Dropping
         // the binding alone leaves both behind, so a sibling that never declared the prop —
         // patched onto the same clone — would keep the archetype's stale value.
         try {
-          element.removeAttribute(key)
-          delete (element as any)[key]
+          element.removeAttribute(attributeNameForProperty(name, isSVG))
+          delete (element as any)[name]
         } catch { /* ignore invalid or non-configurable keys */ }
       }
     }

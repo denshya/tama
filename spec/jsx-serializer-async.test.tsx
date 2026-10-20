@@ -58,6 +58,14 @@ describe("WebJSXSerializerAsync", () => {
     expect(await serializer.asyncToString(jsx as any)).toBe("<span class=\"c\">hey</span>")
   })
 
+  it("asyncToString normalizes HTML and SVG attribute spellings", async () => {
+    const html = { type: "label", props: { children: "x", class: "c", for: "field", tabindex: "1" } }
+    expect(await serializer.asyncToString(html as any)).toBe('<label class="c" for="field" tabindex="1">x</label>')
+
+    const svg = { type: "circle", props: { className: "dot", strokeWidth: 2, textAnchor: "middle" } }
+    expect(await serializer.asyncToString(svg as any)).toBe('<circle class="dot" stroke-width="2" text-anchor="middle"></circle>')
+  })
+
   it("asyncToString self-closing tag without props", async () => {
     const jsx = { type: "br", props: null }
     expect(await serializer.asyncToString(jsx as any)).toBe("<br/>")

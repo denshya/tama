@@ -1,7 +1,10 @@
 import { AsyncFunction, AsyncGeneratorFunction } from "@/BuiltinObjects"
+import { NAMESPACE_SVG } from "@/Inflator/web/consts"
 import WebInflator from "@/Inflator/web/WebInflator"
 import { kebabCase } from "@/utils/string"
 import { isIterable, isJSX, isObservableGetter, isRecord } from "@/utils/testers"
+
+import { attributeNameForProperty, normalizeAttributeName } from "./attributes"
 
 
 interface WebInflatorBased {
@@ -47,7 +50,7 @@ class WebJSXSerializer {
     return children
   }
 
-  jsxAttributesToString: (this: WebInflatorBased, props: any) => string = WebJSXSerializer.jsxAttributesToString
+  jsxAttributesToString: (this: WebInflatorBased, props: any, type?: string) => string = WebJSXSerializer.jsxAttributesToString
 
   jsxToString(jsx: JSX.Element): string {
     if (jsx.props == null) {
@@ -67,7 +70,7 @@ class WebJSXSerializer {
     if (jsx.type.constructor === Symbol) return children
 
     const type = jsx.type
-    const attributes = WebJSXSerializer.jsxAttributesToString.call(this, jsx.props)
+    const attributes = WebJSXSerializer.jsxAttributesToString.call(this, jsx.props, type)
 
     if (WebJSXSerializer.selfClosingTags[type]) {
       return "<" + type + attributes + "/>"
@@ -124,11 +127,12 @@ namespace WebJSXSerializer {
     }
   }
 
-  export function jsxAttributesToString(this: WebInflatorBased, props: any): string {
+  export function jsxAttributesToString(this: WebInflatorBased, props: any, type?: string): string {
     if (props == null) return ""
 
     applyCustomJSXAttributes.call(this, props)
 
+    const isSVG = type != null && NAMESPACE_SVG.has(type)
     let attributes = "", key, value
     for (key in props) {
       if (key === "on") continue
@@ -140,13 +144,14 @@ namespace WebJSXSerializer {
       value = props[key]
       if (value == null) continue
 
-      if (key === "className") key = "class"
-      if (key === "style") value = styleToString(value)
+      const name = normalizeAttributeName(key, isSVG)
+      const attribute = isSVG ? name : attributeNameForProperty(name, isSVG)
+      if (attribute === "style") value = styleToString(value)
 
       value = gettable(value)
       if (value == null) continue
 
-      attributes += " " + key + "=\"" + value + "\""
+      attributes += " " + attribute + "=\"" + value + "\""
     }
     return attributes
   }

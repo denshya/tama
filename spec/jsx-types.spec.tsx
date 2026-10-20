@@ -10,6 +10,38 @@ describe('JSX type tests (with actual JSX)', () => {
     expectType<JSX.Element>(el)
   })
 
+  it('accepts raw and property attribute spellings', () => {
+    const div = <div class="a" className="b" tabindex="0" tabIndex={0} role="button" data-test="x" aria-label="y" />
+    const cell = <td colspan="2" colSpan={2} />
+    const label = <label for="field" htmlFor="field" />
+    expectType<JSX.Element>(div)
+    expectType<JSX.Element>(cell)
+    expectType<JSX.Element>(label)
+  })
+
+  it('accepts raw and property SVG attribute spellings', () => {
+    const svg = (
+      <svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet">
+        <circle
+          class="dot"
+          className="dot"
+          stroke-width="2"
+          strokeWidth={2}
+          text-anchor="middle"
+          textAnchor="middle"
+          font-size="12"
+          fontSize={12}
+          fill-opacity={0.5}
+          fillOpacity={0.5}
+          tabindex="1"
+          tabIndex={1}
+        />
+        <polygon points="0,0 1,1" />
+      </svg>
+    )
+    expectType<JSX.Element>(svg)
+  })
+
   it('invalid intrinsic prop (should error)', () => {
     // @ts-expect-error
     const el = <div unknownProp={123} />

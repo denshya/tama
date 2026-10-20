@@ -3,6 +3,7 @@ import { IsEqual, LiteralUnion } from "@/type-helpers"
 import { Accessible, AccessorGet } from "../Accessor"
 import Guarded from "../Guarded"
 import Observable from "../Observable"
+import { htmlAttributeAliases, svgAttributeAliases } from "./attributes"
 import { ChildrenType } from "./ProtonJSX"
 
 
@@ -126,11 +127,264 @@ declare global {
       style?: Attribute<Record<string, Attribute<string | CSSStyleValue>> | { [K in keyof CSSStyleDeclaration]?: Attribute<CSSStyleDeclaration[K] | CSSStyleValue | null | undefined> } | string>
     }
 
+    type DataAttributes = {
+      [K in `data-${string}`]?: Attribute<string | number | boolean | null | undefined>
+    }
+
+    type RawAriaAttributes = {
+      [K in `aria-${string}`]?: Attribute<string | number | boolean | null | undefined>
+    }
+
+    type CommonAttributes = {
+      /** @attribute */
+      class?: Attribute<string>
+      /** @attribute */
+      role?: Attribute<string>
+    } & DataAttributes & RawAriaAttributes
+
+    type AttributeAliasValue<T, Property> = Property extends keyof T ? Attribute<T[Property]> : never
+
+    type NumericAttributeAlias = "colspan" | "rowspan" | "maxlength" | "minlength" | "tabindex"
+
+    type HTMLAttributeAliasAttributes<T> = {
+      [Alias in keyof typeof htmlAttributeAliases as
+        typeof htmlAttributeAliases[Alias] extends keyof T ? Alias : never]?:
+        Alias extends NumericAttributeAlias
+          ? Attribute<number | string>
+          : AttributeAliasValue<T, typeof htmlAttributeAliases[Alias]>
+    }
+
+    /**
+     * Native SVG attribute names, including hyphenated ones.
+     * `@attribute` marks a field that binds through `setAttribute` rather than a DOM property.
+     */
+    interface SVGAttributeProps {
+      /** Alias for the `class` attribute. */
+      className?: Attribute<string>
+      /** @attribute */
+      tabindex?: Attribute<number | string>
+
+      /** @attribute */
+      fill?: Attribute<string>
+      /** @attribute */
+      "fill-opacity"?: Attribute<string | number>
+      /** @attribute */
+      "fill-rule"?: Attribute<LiteralUnion<"nonzero" | "evenodd", string>>
+      /** @attribute */
+      stroke?: Attribute<string>
+      /** @attribute */
+      "stroke-width"?: Attribute<string | number>
+      /** @attribute */
+      "stroke-opacity"?: Attribute<string | number>
+      /** @attribute */
+      "stroke-linecap"?: Attribute<LiteralUnion<"butt" | "round" | "square", string>>
+      /** @attribute */
+      "stroke-linejoin"?: Attribute<LiteralUnion<"arcs" | "bevel" | "miter" | "miter-clip" | "round", string>>
+      /** @attribute */
+      "stroke-dasharray"?: Attribute<string | number>
+      /** @attribute */
+      "stroke-dashoffset"?: Attribute<string | number>
+      /** @attribute */
+      "stroke-miterlimit"?: Attribute<string | number>
+
+      /** @attribute */
+      opacity?: Attribute<string | number>
+      /** @attribute */
+      color?: Attribute<string>
+      /** @attribute */
+      display?: Attribute<string>
+      /** @attribute */
+      visibility?: Attribute<LiteralUnion<"collapse" | "hidden" | "visible", string>>
+      /** @attribute */
+      overflow?: Attribute<LiteralUnion<"auto" | "hidden" | "scroll" | "visible", string>>
+      /** @attribute */
+      cursor?: Attribute<string>
+
+      /** @attribute */
+      "clip-path"?: Attribute<string>
+      /** @attribute */
+      "clip-rule"?: Attribute<LiteralUnion<"evenodd" | "nonzero", string>>
+      /** @attribute */
+      clip?: Attribute<string>
+      /** @attribute */
+      mask?: Attribute<string>
+      /** @attribute */
+      "mask-type"?: Attribute<LiteralUnion<"alpha" | "luminance", string>>
+      /** @attribute */
+      filter?: Attribute<string>
+      /** @attribute */
+      "marker-start"?: Attribute<string>
+      /** @attribute */
+      "marker-mid"?: Attribute<string>
+      /** @attribute */
+      "marker-end"?: Attribute<string>
+
+      /** @attribute */
+      "text-anchor"?: Attribute<LiteralUnion<"end" | "middle" | "start", string>>
+      /** @attribute */
+      "dominant-baseline"?: Attribute<string>
+      /** @attribute */
+      "alignment-baseline"?: Attribute<string>
+      /** @attribute */
+      "baseline-shift"?: Attribute<string | number>
+
+      /** @attribute */
+      "font-family"?: Attribute<string>
+      /** @attribute */
+      "font-size"?: Attribute<string | number>
+      /** @attribute */
+      "font-style"?: Attribute<string>
+      /** @attribute */
+      "font-weight"?: Attribute<string | number>
+      /** @attribute */
+      "font-stretch"?: Attribute<string>
+      /** @attribute */
+      "font-variant"?: Attribute<string>
+      /** @attribute */
+      "font-size-adjust"?: Attribute<string | number>
+      /** @attribute */
+      "letter-spacing"?: Attribute<string | number>
+      /** @attribute */
+      "word-spacing"?: Attribute<string | number>
+      /** @attribute */
+      "text-decoration"?: Attribute<string>
+      /** @attribute */
+      "text-rendering"?: Attribute<LiteralUnion<"auto" | "geometricPrecision" | "optimizeLegibility" | "optimizeSpeed", string>>
+      /** @attribute */
+      "writing-mode"?: Attribute<string>
+      /** @attribute */
+      "unicode-bidi"?: Attribute<string>
+      /** @attribute */
+      "glyph-orientation-horizontal"?: Attribute<string>
+      /** @attribute */
+      "glyph-orientation-vertical"?: Attribute<string>
+
+      /** @attribute */
+      "paint-order"?: Attribute<string>
+      /** @attribute */
+      "vector-effect"?: Attribute<LiteralUnion<"none" | "non-scaling-stroke" | "non-scaling-size" | "non-rotation" | "fixed-position", string>>
+      /** @attribute */
+      "shape-rendering"?: Attribute<LiteralUnion<"auto" | "crispEdges" | "geometricPrecision" | "optimizeSpeed", string>>
+      /** @attribute */
+      "image-rendering"?: Attribute<string>
+      /** @attribute */
+      "color-interpolation"?: Attribute<string>
+      /** @attribute */
+      "color-interpolation-filters"?: Attribute<string>
+      /** @attribute */
+      "color-rendering"?: Attribute<string>
+      /** @attribute */
+      "color-profile"?: Attribute<string>
+      /** @attribute */
+      "pointer-events"?: Attribute<string>
+      /** @attribute */
+      "mix-blend-mode"?: Attribute<string>
+      /** @attribute */
+      isolation?: Attribute<string>
+
+      /** @attribute */
+      "stop-color"?: Attribute<string>
+      /** @attribute */
+      "stop-opacity"?: Attribute<string | number>
+      /** @attribute */
+      "flood-color"?: Attribute<string>
+      /** @attribute */
+      "flood-opacity"?: Attribute<string | number>
+      /** @attribute */
+      "lighting-color"?: Attribute<string>
+
+      /** @attribute */
+      transform?: Attribute<string>
+      /** @attribute */
+      "transform-origin"?: Attribute<string>
+
+      /** @attribute */
+      viewBox?: Attribute<string>
+      /** @attribute */
+      preserveAspectRatio?: Attribute<string>
+      /** @attribute */
+      points?: Attribute<string>
+      /** @attribute */
+      d?: Attribute<string>
+      /** @attribute */
+      pathLength?: Attribute<string | number>
+      /** @attribute */
+      width?: Attribute<string | number>
+      /** @attribute */
+      height?: Attribute<string | number>
+      /** @attribute */
+      x?: Attribute<string | number>
+      /** @attribute */
+      y?: Attribute<string | number>
+      /** @attribute */
+      rx?: Attribute<string | number>
+      /** @attribute */
+      ry?: Attribute<string | number>
+      /** @attribute */
+      cx?: Attribute<string | number>
+      /** @attribute */
+      cy?: Attribute<string | number>
+      /** @attribute */
+      r?: Attribute<string | number>
+      /** @attribute */
+      x1?: Attribute<string | number>
+      /** @attribute */
+      y1?: Attribute<string | number>
+      /** @attribute */
+      x2?: Attribute<string | number>
+      /** @attribute */
+      y2?: Attribute<string | number>
+
+      /** @attribute */
+      gradientUnits?: Attribute<LiteralUnion<"objectBoundingBox" | "userSpaceOnUse", string>>
+      /** @attribute */
+      gradientTransform?: Attribute<string>
+      /** @attribute */
+      patternUnits?: Attribute<LiteralUnion<"objectBoundingBox" | "userSpaceOnUse", string>>
+      /** @attribute */
+      patternContentUnits?: Attribute<LiteralUnion<"objectBoundingBox" | "userSpaceOnUse", string>>
+      /** @attribute */
+      patternTransform?: Attribute<string>
+      /** @attribute */
+      clipPathUnits?: Attribute<LiteralUnion<"objectBoundingBox" | "userSpaceOnUse", string>>
+      /** @attribute */
+      maskUnits?: Attribute<LiteralUnion<"objectBoundingBox" | "userSpaceOnUse", string>>
+      /** @attribute */
+      maskContentUnits?: Attribute<LiteralUnion<"objectBoundingBox" | "userSpaceOnUse", string>>
+      /** @attribute */
+      markerUnits?: Attribute<LiteralUnion<"strokeWidth" | "userSpaceOnUse", string>>
+      /** @attribute */
+      markerWidth?: Attribute<string | number>
+      /** @attribute */
+      markerHeight?: Attribute<string | number>
+      /** @attribute */
+      refX?: Attribute<string | number>
+      /** @attribute */
+      refY?: Attribute<string | number>
+      /** @attribute */
+      spreadMethod?: Attribute<LiteralUnion<"pad" | "reflect" | "repeat", string>>
+      /** @attribute */
+      startOffset?: Attribute<string | number>
+
+      /** @attribute */
+      xmlns?: Attribute<string>
+      /** @attribute */
+      "xmlns:xlink"?: Attribute<string>
+    }
+
+    type SVGAttributeAliasAttributes = {
+      [Property in keyof typeof svgAttributeAliases]?:
+        typeof svgAttributeAliases[Property] extends keyof SVGAttributeProps
+          ? SVGAttributeProps[typeof svgAttributeAliases[Property]]
+          : Attribute<string | number>
+    }
+
     type Ref<T> = { current: T | null | undefined } | ((current: T) => void)
     type AttributesOf<T> = _AttributesOf<T>["Attributes"]
 
     type ElementAttributes<T> =
       & Partial<AttributesOf<AugmentedAria<T>>>
+      & CommonAttributes
       & CustomAttributes
       & IntrinsicAttributes
       & {
@@ -181,16 +435,16 @@ declare global {
     //    */
     //   is?: string
     // }
-    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-    type SVGElementAttributes<T> = ElementAttributes<T> & (T extends SVGURIReference ? SVGURIReferenceAttribute : {}) & { class?: Attribute<string> }
+    type SVGElementAttributes<T> = ElementAttributes<T> & SVGAttributeProps & SVGAttributeAliasAttributes & (T extends SVGURIReference ? SVGURIReferenceAttribute : {})
 
     type SVGURIReferenceAttribute = SVGURIReference | { href?: Attribute<string> }
 
 
-    type HTMLElements = { [Tag in keyof HTMLElementTagNameMap]: ElementAttributes<HTMLElementTagNameMap[Tag]> }
+    type HTMLElements = { [Tag in keyof HTMLElementTagNameMap]: ElementAttributes<HTMLElementTagNameMap[Tag]> & HTMLAttributeAliasAttributes<HTMLElementTagNameMap[Tag]> }
     type SVGElements = { [Tag in keyof SVGElementTagNameMap]: SVGElementAttributes<SVGElementTagNameMap[Tag]> }
     type MathMLElements = { [Tag in keyof MathMLElementTagNameMap]: ElementAttributes<MathMLElementTagNameMap[Tag]> }
 
-    interface IntrinsicElements extends HTMLElements, SVGElements, MathMLElements { }
+    type IntrinsicElementAttributes = HTMLElements & SVGElements & MathMLElements
+    interface IntrinsicElements extends IntrinsicElementAttributes { }
   }
 }

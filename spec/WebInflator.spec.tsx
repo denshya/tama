@@ -216,6 +216,78 @@ describe("WebInflator", () => {
     expect(div.className).toBe("bar")
   })
 
+  it("accepts raw and property spellings for HTML attributes", () => {
+    const div = inflator.inflate(<div class="raw" tabindex="2" />) as HTMLDivElement
+    expect(div.className).toBe("raw")
+    expect(div.getAttribute("class")).toBe("raw")
+    expect(div.tabIndex).toBe(2)
+
+    const camel = inflator.inflate(<div className="camel" tabIndex={3} />) as HTMLDivElement
+    expect(camel.className).toBe("camel")
+    expect(camel.getAttribute("class")).toBe("camel")
+    expect(camel.tabIndex).toBe(3)
+
+    const cell = inflator.inflate(<td colspan="2" />) as HTMLTableCellElement
+    expect(cell.colSpan).toBe(2)
+    expect(cell.getAttribute("colspan")).toBe("2")
+
+    const cellCamel = inflator.inflate(<td colSpan={3} />) as HTMLTableCellElement
+    expect(cellCamel.colSpan).toBe(3)
+    expect(cellCamel.getAttribute("colspan")).toBe("3")
+
+    const label = inflator.inflate(<label for="field" />) as HTMLLabelElement
+    expect(label.htmlFor).toBe("field")
+    expect(label.getAttribute("for")).toBe("field")
+  })
+
+  it("binds reactive raw HTML attribute spellings", () => {
+    const cls = new State("foo")
+    const div = inflator.inflate(<div class={cls} />) as HTMLDivElement
+    expect(div.className).toBe("foo")
+
+    cls.set("bar")
+    expect(div.className).toBe("bar")
+    expect(div.getAttribute("class")).toBe("bar")
+  })
+
+  it("normalizes SVG attribute spellings", () => {
+    const stroke = new State("red")
+    const svg = inflator.inflate(
+      <svg viewBox="0 0 24 24">
+        <circle className="dot" strokeWidth={2} textAnchor="middle" stroke={stroke} />
+        <polygon points="0,0 1,1" />
+      </svg>
+    ) as SVGSVGElement
+
+    expect(svg.getAttribute("viewBox")).toBe("0 0 24 24")
+
+    const circle = svg.querySelector("circle")!
+    expect(circle.getAttribute("class")).toBe("dot")
+    expect(circle.getAttribute("stroke-width")).toBe("2")
+    expect(circle.getAttribute("text-anchor")).toBe("middle")
+    expect(circle.getAttribute("stroke")).toBe("red")
+
+    stroke.set("blue")
+    expect(circle.getAttribute("stroke")).toBe("blue")
+
+    const polygon = svg.querySelector("polygon")!
+    expect(polygon.getAttribute("points")).toBe("0,0 1,1")
+  })
+
+  it("accepts raw and property spellings for SVG attributes", () => {
+    const raw = inflator.inflate(<circle className="raw" stroke-width="2" text-anchor="middle" tabindex="1" />) as SVGCircleElement
+    expect(raw.getAttribute("class")).toBe("raw")
+    expect(raw.getAttribute("stroke-width")).toBe("2")
+    expect(raw.getAttribute("text-anchor")).toBe("middle")
+    expect(raw.getAttribute("tabindex")).toBe("1")
+
+    const camel = inflator.inflate(<circle class="camel" strokeWidth={2} textAnchor="end" tabIndex={2} />) as SVGCircleElement
+    expect(camel.getAttribute("class")).toBe("camel")
+    expect(camel.getAttribute("stroke-width")).toBe("2")
+    expect(camel.getAttribute("text-anchor")).toBe("end")
+    expect(camel.getAttribute("tabindex")).toBe("2")
+  })
+
   it("binds multiple event listener sources from arrays", () => {
     const events: string[] = []
 
@@ -249,10 +321,11 @@ describe("WebInflator", () => {
 
   // it("errors on invalid intrinsic types", () => {})
 
-  it("binds data-, aria-, and boolean attributes", () => {
-    const input = inflator.inflate(<input disabled data-test="d" aria-label="a" />) as HTMLInputElement
+  it("binds role, data-, aria-, and boolean attributes", () => {
+    const input = inflator.inflate(<input disabled role="button" data-test="d" aria-label="a" />) as HTMLInputElement
 
     expect(input.disabled).toBe(true)
+    expect(input.getAttribute("role")).toBe("button")
     expect(input.getAttribute("data-test")).toBe("d")
     expect(input.getAttribute("aria-label")).toBe("a")
   })
