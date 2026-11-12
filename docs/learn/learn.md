@@ -7,7 +7,7 @@ sidebar_position: 1
 ## Install
 
 ```bash
-bun i @denshya/proton @denshya/reactive
+bun i @denshya/tama @denshya/reactive
 bun i -D vite typescript
 ```
 
@@ -38,7 +38,7 @@ Enable Tama JSX
   "compilerOptions": {
     // ...
     "jsx": "react-jsx",
-    "jsxImportSource": "@denshya/proton/jsx/virtual",
+    "jsxImportSource": "@denshya/tama/jsx/virtual",
     // ...
   }
 }
@@ -53,7 +53,7 @@ Enable Tama JSX
 
 ```tsx title="/src/main.tsx"
 import { State } from "@denshya/reactive"
-import { WebInflator } from "@denshya/proton"
+import { WebInflator } from "@denshya/tama"
 
 function RangeApp() {
   const progress = new State(50)
@@ -172,16 +172,17 @@ Supports plain array mapping just like in React, though doesn't require `key` at
 <div>{[1, 2, 3].map(item => <span>{item}</span>)}</div>
 ```
 
-Also supports observable iterable (e.g. Array, Set, ...).
+For lists that change over time, use [`StateArray`](./unwinding/reactivity.md#statearray) — its `map` returns a reactive list.
 
 ```tsx
-const items = new State([1, 2, 3])
+import { StateArray } from "@denshya/reactive"
 
-<div>{items.map(items => items.map(item => <span>{item}</span>))}</div>
+const items = new StateArray([1, 2, 3])
+
+<div>{items.map(item => <span>{item}</span>)}</div>
+
+items.push(4) // Renders a new `<span>4</span>`.
 ```
-
-> [!NOTE]
-> This is a bit confusing snippet, you can ease it by using [`StateArray`](./unwinding/reactivity.md#statearray).
 
 ## Extend Code
 

@@ -15,7 +15,7 @@ This extends JSX attributes. It requires three steps to make it work.
 ### Real-world Example
 
 ```ts
-import { WebInflator } from "@denshya/proton"
+import { WebInflator } from "@denshya/tama"
 import { castArray } from "./utils/common"
 import { bem } from "./utils/bem"
 import { StateOrPlain } from "@denshya/reactive"

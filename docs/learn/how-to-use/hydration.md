@@ -35,7 +35,7 @@ The server DOM is replaced as a whole, so there is no diffing overhead, and the 
 If the page does not need client-side interactivity after load, generate HTML and stop there.
 
 ```tsx
-import { WebJSXSerializerAsync } from "@denshya/proton"
+import { WebJSXSerializerAsync } from "@denshya/tama"
 
 const serializer = new WebJSXSerializerAsync
 const html = await serializer.asyncToString(<App />)
@@ -48,7 +48,7 @@ This is the simplest and most stable path.
 If the page needs interactivity, the safest documented Tama path today is to render on the server and then mount a fresh client view.
 
 ```tsx
-import { WebInflator } from "@denshya/proton"
+import { WebInflator } from "@denshya/tama"
 
 const inflator = new WebInflator
 const root = document.getElementById("root")!

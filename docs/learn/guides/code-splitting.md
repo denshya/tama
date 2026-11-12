@@ -6,7 +6,7 @@ Because components may be async, thus route-level and component-level code split
 ## Component Level
 
 ```tsx
-import { Tama } from "@denshya/proton"
+import { Tama } from "@denshya/tama"
 
 function lazy<T extends JSX.ElementTypeConstructor>(importFactory: () => Promise<{ default: T } | T>) {
   return async function Lazy(this: Tama.Component) {

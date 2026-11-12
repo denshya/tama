@@ -9,7 +9,7 @@ The `demos/simple` example uses a tiny router based on `State`, `history.pushSta
 
 ```tsx
 import { State, StateOrPlain } from "@denshya/reactive"
-import { Tama } from "@denshya/proton"
+import { Tama } from "@denshya/tama"
 
 class WebNavigation {
   readonly current = new State(new URL(window.location.href))

@@ -14,7 +14,7 @@ The most important point is that SSR is a serialization step, not a separate ren
 Use this when the rendered tree is fully synchronous.
 
 ```tsx
-import { WebJSXSerializer } from "@denshya/proton"
+import { WebJSXSerializer } from "@denshya/tama"
 
 const serializer = new WebJSXSerializer
 const html = serializer.toString(<App />)
@@ -25,7 +25,7 @@ const html = serializer.toString(<App />)
 Use this when components or values can be async.
 
 ```tsx
-import { WebJSXSerializerAsync } from "@denshya/proton"
+import { WebJSXSerializerAsync } from "@denshya/tama"
 
 const serializer = new WebJSXSerializerAsync
 const html = await serializer.asyncToString(<App />)

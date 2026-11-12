@@ -69,7 +69,7 @@ Use this when the logic is shared across a subtree or across screens.
 ### Explicit Lifecycle Object
 
 ```tsx
-import { Lifecycle, MountObserver, Ref } from "@denshya/proton"
+import { Lifecycle, MountObserver, Ref } from "@denshya/tama"
 
 function SearchField() {
   const inputRef = new Ref<HTMLInputElement | null>(null)

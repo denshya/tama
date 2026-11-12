@@ -3,7 +3,7 @@
 ## Basic Usage (Universal)
 
 ```tsx
-import { Lifecycle } from "@denshya/proton"
+import { Lifecycle } from "@denshya/tama"
 
 new Lifecycle(() => {
   console.log("mounted")
@@ -16,7 +16,7 @@ new Lifecycle(() => {
 For DOM listeners, the signal overload is usually the most ergonomic.
 
 ```tsx
-import { Lifecycle } from "@denshya/proton"
+import { Lifecycle } from "@denshya/tama"
 
 const pointerLifecycle = new Lifecycle(signal => {
   window.addEventListener("pointerdown", event => {
@@ -30,7 +30,7 @@ const pointerLifecycle = new Lifecycle(signal => {
 Use `MountObserver.with(...)` together with `ref` when the side effect depends on a specific element.
 
 ```tsx title="Navbar.tsx"
-import { Lifecycle, MountObserver, Ref } from "@denshya/proton"
+import { Lifecycle, MountObserver, Ref } from "@denshya/tama"
 
 function Navbar() {
   const navRef = new Ref<HTMLElement | null>(null)
