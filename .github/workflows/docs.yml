@@ -29,7 +29,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - uses: denshya/documaru@latest
+      - uses: denshya/documaru@v2
         with:
           path: docs
           base-url: /
